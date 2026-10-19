@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+/* ─── SITEWISE V4.2 Design Tokens ─────────────────────────────── */
+
+@theme {
+  /* Base Surfaces */
+  --color-surface-canvas: #0C0E10;
+  --color-surface-base: #121416;
+  --color-surface-container-low: #1A1C1E;
+  --color-surface-container-med: #24282B;
+  --color-surface-container-high: #2D3236;
+  --color-surface-border-subtle: #2A2E33;
+  --color-surface-border-default: #38393C;
+  --color-surface-border-strong: #50555C;
+
+  /* Brand Accent */
+  --color-brand-yellow: #F5C542;
+  --color-brand-yellow-hover: #FFD564;
+  --color-brand-gold: #D4A916;
+
+  /* Data Provenance */
+  --color-prov-verified: #4ADE80;
+  --color-prov-verified-bg: rgba(46,125,79,0.14);
+  --color-prov-ai: #FBBF24;
+  --color-prov-ai-bg: rgba(217,154,53,0.14);
+  --color-prov-human: #38BDF8;
+  --color-prov-human-bg: rgba(56,189,248,0.14);
+  --color-prov-risk: #F87171;
+  --color-prov-risk-bg: rgba(239,68,68,0.14);
+  --color-prov-action: #F5C542;
+  --color-prov-action-bg: rgba(245,197,66,0.14);
+  --color-prov-demo: #F5C542;
+  --color-prov-demo-bg: rgba(245,197,66,0.10);
+
+  /* Typography Colors */
+  --color-text-primary: #F3F4F6;
+  --color-text-secondary: #9CA3AF;
+  --color-text-tertiary: #6B7280;
+  --color-text-code: #E2E8F0;
+
+  /* Font Families */
+  --font-display: 'Space Grotesk', 'Inter', -apple-system, sans-serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* Radii */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+}
+
+/* ─── Base Styles ─────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-surface-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface-base);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-border-default);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surface-border-strong);
+}
+
+/* ─── Utility Animations ──────────────────────────────────────── */
+
+@keyframes pulse-amber {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 197, 66, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 197, 66, 0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out both;
+}
+
+.animate-pulse-amber {
+  animation: pulse-amber 2s ease-in-out infinite;
+}

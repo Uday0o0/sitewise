@@ -1,0 +1,47 @@
+# Environment and secrets
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+!backend/.env.example
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+*.db
+.pytest_cache/
+uploads/
+scratch/
+venv/
+.venv/
+env/
+ENV/
+
+# Databases
+sitewise.db
+backend/sitewise.db
+*.db-journal
+*.sqlite
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Node & Build Outputs
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Editor & System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
