@@ -1182,8 +1182,28 @@ export function InspectionWorkbenchPage() {
                   >
                     <NdtStatusIcon status={ndt.status} />
                     <div className="flex-1">
-                      <p className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>{ndt.protocolName}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>{ndt.protocolName}</p>
+                        {ndt.provenance && (
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.2 rounded font-bold ${
+                              ndt.provenance === 'SOURCE_VERIFIED'
+                                ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                                : ndt.provenance === 'HUMAN_REVIEWED'
+                                ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                                : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                            }`}
+                          >
+                            {ndt.provenance.replace('_', ' ')}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-text-tertiary)' }}>{ndt.details}</p>
+                      {ndt.sourceDocumentId && (
+                        <p className="text-[10px] mt-0.5 font-mono text-emerald-400">
+                          Source Document: {ndt.sourceDocumentId}
+                        </p>
+                      )}
                       {ndt.scheduledTime && (
                         <p className="text-[10px] mt-0.5 font-mono" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
                           Scheduled: {new Date(ndt.scheduledTime).toLocaleString()}

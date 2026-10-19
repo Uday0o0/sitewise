@@ -140,7 +140,7 @@ async def seed():
                 direct_impact="Structural capacity reduction — shear transfer zone compromised",
                 cascade_financial_exposure_inr="₹20.30 Lakhs",
                 critical_path_slip_days=4,
-                suggested_action="CFRP wrap + pressure injection per IRC:SP:40",
+                suggested_action="CFRP wrap + pressure injection per IRC:SP:40 [UNVERIFIED CODE]",
                 structure_element="Pier Cap 18 Cantilever Downstream Face",
                 flight_id="DJI Matrice 300 RTK",
                 lens="45mm F2.8",
@@ -160,9 +160,25 @@ async def seed():
                 inferred_depth_mm=35,
                 inferred_root_mechanism="Early thermal shrinkage with secondary flexural propagation under cantilever dead load redistribution during staged post-tensioning",
                 ndt_corroboration=[
-                    {"protocolName": "Rebound Hammer (IS:13311)", "status": "PASS", "details": "Surface hardness index 38 — within acceptable range"},
-                    {"protocolName": "UPV Cross-Hole (IS:13311 Part 1)", "status": "SCHEDULED", "details": "Scheduled for velocity profiling", "scheduledTime": "2024-11-15T10:00:00Z"},
-                    {"protocolName": "Core Extraction (IS:516)", "status": "AWAITING_DISPOSITION", "details": "Awaiting Resident Engineer approval for core sampling location"},
+                    {
+                        "protocolName": "Rebound Hammer (IS:13311)",
+                        "status": "PASS",
+                        "details": "Surface hardness index 38 — synthetic demo telemetry log (AST-003); unverified in-situ reading.",
+                        "provenance": "SYNTHETIC_DEMO",
+                    },
+                    {
+                        "protocolName": "UPV Cross-Hole (IS:13311 Part 1 / IS:516)",
+                        "status": "PASS",
+                        "details": "Observed in-situ velocity: 3,850 m/s across transverse shear plane per QA report DOC-5442BA12E9 (Good grade 3,500–4,000 m/s). Acceptance threshold for excellent concrete is >4,000 m/s.",
+                        "provenance": "SOURCE_VERIFIED",
+                        "sourceDocumentId": "DOC-5442BA12E9",
+                    },
+                    {
+                        "protocolName": "Core Extraction (IS:516)",
+                        "status": "AWAITING_DISPOSITION",
+                        "details": "Awaiting Resident Engineer approval for core sampling location. No core specimen taken.",
+                        "provenance": "HUMAN_REVIEWED",
+                    },
                 ],
                 disposition_status="AWAITING_REVIEW",
                 pki_certificate_valid=False,
@@ -319,9 +335,9 @@ async def seed():
                 page_number=1,
                 citation_text="IRC:112-2020 Clause 12.3: Limit State of Cracking. For reinforced concrete members in severe environmental exposure, the design crack width limit shall not exceed 0.20 mm under quasi-permanent load combinations.",
             ),
-            GraphNode(id="N-RSK-042", graph_id="GR-FND104", project_id="PRJ-NH48-PKG3", node_type="RISK", tier=3, provenance="CALCULATED_RISK", title="RSK-042: Shear Capacity Deficit", primary_subtitle="75% exceedance of permissible limit", metrics={"exceedance": "75%", "exposure": "₹20.3L"}, badge_text="CALCULATED PROJECT RISK", code_reference="IS:456 Cl.40.1", severity="critical"),
-            GraphNode(id="N-CPM-001", graph_id="GR-FND104", project_id="PRJ-NH48-PKG3", node_type="IMPACT", tier=4, provenance="CALCULATED_RISK", title="CPM Impact: -4 Day Slip", primary_subtitle="Span 18-19 precast launch blocked", metrics={"slipDays": "-4", "wbs": "WBS-3.3.1"}, badge_text="CRITICAL PATH DRIFT", severity="high"),
-            GraphNode(id="N-MIT-001", graph_id="GR-FND104", project_id="PRJ-NH48-PKG3", node_type="ACTION", tier=5, provenance="PROPOSED_ACTION", title="CFRP Wrap + Pressure Injection", primary_subtitle="IRC:SP:40 compliant remediation", metrics={"recoveryDays": "+15", "cost": "₹5.5L", "shearRetention": "94.2%"}, badge_text="PROPOSED MITIGATION", code_reference="IRC:SP:40"),
+            GraphNode(id="N-RSK-042", graph_id="GR-FND104", project_id="PRJ-NH48-PKG3", node_type="RISK", tier=3, provenance="CALCULATED_RISK", title="RSK-042: Shear Capacity Deficit", primary_subtitle="75% exceedance of permissible limit", metrics={"exceedance": "75%", "exposure": "₹20.3L"}, badge_text="CALCULATED PROJECT RISK", code_reference="IS:456 Cl.40.1 [UNVERIFIED]", severity="critical"),
+            GraphNode(id="N-CPM-001", graph_id="GR-FND104", project_id="PRJ-NH48-PKG3", node_type="IMPACT", tier=4, provenance="CALCULATED_RISK", title="CPM Impact: -4 Day Slip", primary_subtitle="Span 18-19 precast launch blocked (Master Schedule Rev 4.1 Unverified)", metrics={"slipDays": "-4", "wbs": "WBS-3.3.1"}, badge_text="CRITICAL PATH DRIFT • DEMO ESTIMATE", severity="high"),
+            GraphNode(id="N-MIT-001", graph_id="GR-FND104", project_id="PRJ-NH48-PKG3", node_type="ACTION", tier=5, provenance="PROPOSED_ACTION", title="CFRP Wrap + Pressure Injection", primary_subtitle="Proposed CFRP remediation (IRC:SP:40 Unverified)", metrics={"recoveryDays": "+15", "cost": "₹5.5L", "shearRetention": "94.2%"}, badge_text="PROPOSED MITIGATION • UNVERIFIED SPEC", code_reference="IRC:SP:40 [UNVERIFIED]"),
         ]
         s.add_all(graph_nodes)
 
@@ -346,9 +362,9 @@ async def seed():
                     {"documentId": "DOC-ORTHO", "title": "Pier 18 Calibrated Orthomosaic", "spec": "GSD 0.8mm/px GeoTIFF (Synthetic)", "downloadUrl": "#"},
                 ],
                 governing_code_limits=[
-                    {"code": "IRC:112 Cl.12.3", "limit": "0.20mm", "measured": "0.35mm", "status": "EXCEEDED"},
-                    {"code": "IS:456 Cl.35.3.2", "limit": "0.30mm (severe)", "measured": "0.35mm", "status": "EXCEEDED"},
-                    {"code": "IS:456 Cl.40.1", "limit": "τ_c = 0.62 MPa", "measured": "Est. 0.48 MPa", "status": "CRITICAL_ZONE"},
+                    {"code": "IRC:112 Cl.12.3", "limit": "0.20mm", "measured": "0.35mm", "status": "EXCEEDED", "verificationStatus": "SOURCE_VERIFIED", "sourceDocument": "DOC-57F675F71F"},
+                    {"code": "IS:456 Cl.35.3.2", "limit": "0.30mm (severe)", "measured": "0.35mm", "status": "EXCEEDED", "verificationStatus": "UNVERIFIED", "sourceDocument": "External Code (Not Ingested)"},
+                    {"code": "IS:456 Cl.40.1", "limit": "τ_c = 0.62 MPa", "measured": "Est. 0.48 MPa", "status": "CRITICAL_ZONE", "verificationStatus": "UNVERIFIED", "sourceDocument": "External Code (Not Ingested)"},
                 ],
             ),
             GraphInspectorData(
@@ -359,7 +375,7 @@ async def seed():
                     {"documentId": "DOC-57F675F71F", "title": "IRC:112-2020 Bridge Design Code", "spec": "Clause 12.3 Crack Aperture Threshold", "downloadUrl": "/api/v4/projects/PRJ-NH48-PKG3/documents/DOC-57F675F71F/file"},
                 ],
                 governing_code_limits=[
-                    {"code": "IS:456 Cl.40.1", "limit": "τ_c = 0.62 MPa", "measured": "Est. deficit 75%", "status": "EXCEEDED"},
+                    {"code": "IS:456 Cl.40.1", "limit": "τ_c = 0.62 MPa", "measured": "Est. deficit 75%", "status": "EXCEEDED", "verificationStatus": "UNVERIFIED", "sourceDocument": "External Code (Not Ingested)"},
                 ],
             ),
         ]

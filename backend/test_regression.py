@@ -335,3 +335,142 @@ async def test_08_cross_page_consistency_and_citations():
         assert "0.20" in s_data["passages"][0]["content"]
 
 
+@pytest.mark.asyncio
+async def test_09_demo_data_integrity_and_provenance_audit():
+    """Verify demo data integrity, provenance classification, and source verification rules.
+
+    Audits:
+    1. Source claims unsupported by their cited passages.
+    2. Missing source documents and missing passages handling.
+    3. Observations incorrectly presented as standards or acceptance thresholds (3,850 m/s UPV).
+    4. Synthetic demo data is never presented as verified project evidence.
+    5. AI answers whose citations do not support the associated claims (out-of-bounds rejection).
+    6. Consistency of provenance labels across API responses.
+    """
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Re-seed to ensure clean baseline
+        from seed import seed
+        await seed()
+
+        # -------------------------------------------------------------------
+        # 1. Missing source documents return 404
+        # -------------------------------------------------------------------
+        res_missing_doc = await ac.get("/api/v4/projects/PRJ-NH48-PKG3/documents/DOC-NONEXISTENT/file")
+        assert res_missing_doc.status_code == 404
+
+        res_missing_meta = await ac.get("/api/v4/projects/PRJ-NH48-PKG3/documents/DOC-NONEXISTENT")
+        assert res_missing_meta.status_code == 404
+
+        # -------------------------------------------------------------------
+        # 2. Source claims verified against actual passage text
+        # -------------------------------------------------------------------
+        res_links = await ac.get("/api/v4/projects/PRJ-NH48-PKG3/findings/FND-104/evidence-links")
+        assert res_links.status_code == 200
+        links = res_links.json()["links"]
+        assert len(links) >= 2
+
+        irc_link = next(l for l in links if l["documentId"] == "DOC-57F675F71F")
+        assert irc_link["provenance"] == "SOURCE_VERIFIED"
+        assert "0.20 mm" in irc_link["citationText"]
+
+        qa_link = next(l for l in links if l["documentId"] == "DOC-5442BA12E9")
+        assert qa_link["provenance"] == "SOURCE_VERIFIED"
+        assert "3850 m/s" in qa_link["citationText"]
+
+        # Verify that actual passage text from search strictly supports the crack aperture claim
+        res_search_irc = await ac.post("/api/v4/projects/PRJ-NH48-PKG3/documents/search", json={
+            "query": "Clause 12.3 Limit State of Cracking",
+            "topK": 2,
+        })
+        assert res_search_irc.status_code == 200
+        p1_data = res_search_irc.json()["passages"][0]
+        assert "0.20 mm" in p1_data["content"]
+        assert "Clause 12.3" in p1_data["content"]
+
+        # -------------------------------------------------------------------
+        # 3. Observation (3,850 m/s) distinguished from acceptance threshold
+        # -------------------------------------------------------------------
+        res_sim = await ac.post("/api/v4/simulator/evaluate", json={
+            "findingId": "FND-104",
+            "graphNodeId": "N-AI-001",
+            "baselineType": "FULL_RECAST_DEMOLITION",
+            "scenarioType": "CFRP_PRESSURE_INJECTION",
+            "parameters": {
+                "gantryIdlingDailyRateInr": 150000,
+                "cfrpCuringWindowHours": 48,
+                "independentEngineerSlaHours": 24,
+                "upvTargetThresholdMps": 3850,
+            },
+        })
+        assert res_sim.status_code == 200
+        sim_data = res_sim.json()
+
+        # The 3850 m/s input must be explicitly UNVERIFIED as a standard threshold
+        source_backed = sim_data["inputClassification"]["sourceBacked"]
+        upv_param = next(p for p in source_backed if p["param"] == "upvTargetThresholdMps")
+        assert upv_param["isVerified"] is False
+        assert upv_param["verificationStatus"] == "UNVERIFIED"
+        assert "IRC:SP:40 is not present in the project corpus" in upv_param["verificationNote"]
+        assert "3,850 m/s is the in-situ field measurement" in upv_param["verificationNote"]
+
+        # Model boundaries must distinguish field observation and state no certified advice
+        boundaries = sim_data["modelBoundaries"]
+        assert any("Field observation distinction: 3,850 m/s is an empirical in-situ reading" in b for b in boundaries)
+        assert any("not certified engineering" in b.lower() for b in boundaries)
+
+        # -------------------------------------------------------------------
+        # 4. Synthetic data is never presented as verified evidence
+        # -------------------------------------------------------------------
+        res_telemetry = await ac.get("/api/v4/findings/FND-104/telemetry")
+        assert res_telemetry.status_code == 200
+        ndt_list = res_telemetry.json()["ndtCorroboration"]
+        assert len(ndt_list) >= 3
+
+        rebound = next(n for n in ndt_list if "Rebound Hammer" in n["protocolName"])
+        assert rebound["provenance"] == "SYNTHETIC_DEMO"
+
+        upv_ndt = next(n for n in ndt_list if "UPV" in n["protocolName"])
+        assert upv_ndt["provenance"] == "SOURCE_VERIFIED"
+        assert upv_ndt["sourceDocumentId"] == "DOC-5442BA12E9"
+
+        core = next(n for n in ndt_list if "Core" in n["protocolName"])
+        assert core["provenance"] == "HUMAN_REVIEWED"
+
+        # Verify simulator synthetic inputs are flagged isSynthetic
+        synthetic_inputs = sim_data["inputClassification"]["syntheticDemo"]
+        for s_in in synthetic_inputs:
+            assert s_in["isSynthetic"] is True
+            assert s_in["verificationStatus"] == "SYNTHETIC_DEMO"
+
+        # -------------------------------------------------------------------
+        # 5. AI answers: reject fabricated citations
+        # -------------------------------------------------------------------
+        from services.ai_provider import _validate_citations
+        sample_passages = [
+            {"document_id": "DOC-1", "document_title": "Doc 1", "content": "Sample content 1", "chunk_index": 0},
+            {"document_id": "DOC-2", "document_title": "Doc 2", "content": "Sample content 2", "chunk_index": 1},
+        ]
+        # Valid citation [DOC-1] kept, fabricated citation [DOC-99] stripped
+        raw_answer_with_hallucination = "Per [DOC-1], crack limit is 0.20mm. Per [DOC-99], gantry rate is ₹10L."
+        validated = _validate_citations(raw_answer_with_hallucination, sample_passages)
+        assert len(validated) == 1
+        assert validated[0].document_id == "DOC-1"
+        assert not any(c.document_id == "DOC-99" for c in validated)
+
+        # -------------------------------------------------------------------
+        # 6. Provenance label consistency across graph nodes
+        # -------------------------------------------------------------------
+        res_graph = await ac.get("/api/v4/graphs/GR-FND104/topology")
+        assert res_graph.status_code == 200
+        nodes = res_graph.json()["nodes"]
+        node_map = {n["id"]: n for n in nodes}
+
+        # N-SRC-001 is SOURCE_VERIFIED
+        assert node_map["N-SRC-001"]["provenance"] == "SOURCE_VERIFIED"
+        # N-AI-001 is AI_INFERRED
+        assert node_map["N-AI-001"]["provenance"] == "AI_INFERRED"
+        # N-MIT-001 is PROPOSED_ACTION (unverified spec)
+        assert node_map["N-MIT-001"]["provenance"] == "PROPOSED_ACTION"
+        assert "UNVERIFIED" in node_map["N-MIT-001"]["codeReference"]
+
+

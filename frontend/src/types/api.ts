@@ -132,6 +132,8 @@ export interface NdtCorroborationItem {
   status: 'PASS' | 'SCHEDULED' | 'AWAITING_DISPOSITION';
   details: string;
   scheduledTime?: string;
+  provenance?: string;
+  sourceDocumentId?: string;
 }
 
 export interface ReviewerDispositionState {

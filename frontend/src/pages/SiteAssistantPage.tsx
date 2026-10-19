@@ -206,11 +206,11 @@ Upload construction documents in the **Evidence Centre** or select a document sc
       setTimeout(() => {
         let simulatedAnswer = '';
         if (question.toLowerCase().includes('irc:112') || question.toLowerCase().includes('crack')) {
-          simulatedAnswer = `### Structural Assessment (Simulated Demo Corpus)\n\nGoverning specification **IRC:112-2020 Clause 12.3.4 (Table 12.1)** specifies a maximum allowable design crack width ($w_{\\max}$) of **0.20 mm** for severe environmental exposure.\n\nMeasured aperture of 0.35 mm exceeds the allowable threshold by **+75%**, requiring structural disposition before launching operations can proceed.`;
+          simulatedAnswer = `### Structural Assessment (Simulated Demo Corpus)\n\nGoverning specification **IRC:112-2020 Clause 12.3** specifies that for reinforced concrete members in severe environmental exposure, the design crack width limit shall not exceed **0.20 mm** under quasi-permanent load combinations (verified in DOC-57F675F71F).\n\nMeasured aperture of 0.35 mm exceeds the allowable threshold by **+75%**, requiring structural disposition before launching operations can proceed.\n\n*Notice: Non-certified engineering calculation.*`;
         } else if (question.toLowerCase().includes('damages') || question.toLowerCase().includes('liquidated')) {
-          simulatedAnswer = `### Contractual Exposure (Simulated Demo Corpus)\n\nUnder **Clause 8.7 of the Concession Agreement**, liquidated damages accrue at **₹2.40 Lakhs/day** for critical-path milestones beyond the allowable cure period. Gantry idle equipment standing charges are assessed at ₹1.10 Lakhs/shift.`;
+          simulatedAnswer = `### Contractual Exposure (Simulated Demo Corpus)\n\n> **[UNVERIFIED DEMO ESTIMATE]**: No Concession Agreement or Contract Schedule document is ingested in the project corpus.\n\nUnder hypothetical demo assumptions, liquidated damages accrue at **₹2.40 Lakhs/day** for critical-path milestones beyond the allowable cure period. Gantry idle equipment standing charges are estimated at ₹1.10 Lakhs/shift.`;
         } else {
-          simulatedAnswer = `### Simulated Resident Engineer Assistant Response\n\nQuery: *"${question}"*\n\nBased on the offline demonstration database, Pier 18 requires crack injection and epoxy resin verification per IRC:SP:40 before precast girder segment #B24 can be erected.`;
+          simulatedAnswer = `### Simulated Resident Engineer Assistant Response\n\nQuery: *"${question}"*\n\nBased on the offline demonstration database, Pier 18 requires crack injection and epoxy resin verification per IRC:SP:40 [UNVERIFIED CODE] before precast girder segment #B24 can be erected.\n\n*Notice: Not certified structural engineering advice.*`;
         }
 
         const botMsg: GroundedChatMessage = {

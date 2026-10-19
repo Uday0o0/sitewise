@@ -122,6 +122,8 @@ class NdtCorroborationItem(BaseModel):
     status: Literal["PASS", "SCHEDULED", "AWAITING_DISPOSITION"]
     details: str
     scheduledTime: Optional[str] = None
+    provenance: Optional[str] = "UNVERIFIED"
+    sourceDocumentId: Optional[str] = None
 
 
 class ReviewerDispositionState(BaseModel):

@@ -155,9 +155,9 @@ def deterministic_evaluate(params: SimulatorEvaluateRequest) -> SimulatorEvaluat
             {
                 "param": "upvTargetThresholdMps",
                 "value": f"{p.upvTargetThresholdMps} m/s",
-                "source": "IRC:SP:40 Table 4 (Ultrasonic Pulse Velocity Quality Limits)",
+                "source": "IRC:SP:40 Table 4 / IS:13311 Part 1 (Ultrasonic Pulse Velocity Acceptance)",
                 "verificationStatus": "UNVERIFIED",
-                "verificationNote": "Source document IRC:SP:40 is not present in the project corpus; 3,850 m/s is an empirical defect report value rather than an established IRC table limit.",
+                "verificationNote": "Source document IRC:SP:40 is not present in the project corpus; 3,850 m/s is an empirical defect report value rather than an established IRC table limit. Distinguish observed reading: 3,850 m/s is the in-situ field measurement logged in DOC-5442BA12E9 (Good grade per IS:13311 Part 1 Table 1: 3,500–4,000 m/s), whereas full structural reinstatement target is >4,000 m/s (Excellent).",
                 "isVerified": False,
             },
             {
@@ -235,10 +235,12 @@ def deterministic_evaluate(params: SimulatorEvaluateRequest) -> SimulatorEvaluat
         modelBoundaries=[
             "Outputs are estimates based on stated assumptions. Synthetic demo values are illustrative and results are not certified engineering or construction advice.",
             "Deterministic contract arithmetic — not a calibrated Monte Carlo or probabilistic risk model",
+            "Field observation distinction: 3,850 m/s is an empirical in-situ reading from QA report DOC-5442BA12E9, not an acceptance threshold standard.",
             f"Baseline gross exposure derived as {baseline_gantry_days} days gantry idling (₹{gantry_rate:,}/day) + ₹{baseline_demo_cost:,} recast demolition materials",
             f"Scenario cost derived as ₹{cfrp_base_cost:,} CFRP composite materials + ₹{cfrp_labor_rate:,}/day specialist curing supervision ({curing_hours}h)",
             "Schedule convention: Scenario projected dates indicate +X days slip past certified P6 baseline target. Days recovered measures recovery relative to baseline recast.",
             "UPV structural resilience is an empirical linear approximation; requires laboratory core validation",
+            "This tool is an operational planning simulator and does NOT provide certified structural engineering advice or statutory authority approval.",
         ],
     )
 

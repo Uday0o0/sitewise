@@ -731,7 +731,7 @@ export function SimulatorPage() {
                   UPV Target Threshold (m/s)
                 </label>
                 <span className="text-[9px] font-mono text-amber-400/90 font-medium bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
-                  IRC:SP:40 (Unverified Standard)
+                  Observed: 3,850 m/s (DOC-5442BA12E9) • Target &gt;4,000 m/s
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -757,6 +757,9 @@ export function SimulatorPage() {
                   }}
                 />
               </div>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Field log DOC-5442BA12E9 measured 3,850 m/s (IS:13311 Part 1 &quot;Good&quot; grade: 3,500–4,000 m/s). Full remediation acceptance target is typically &gt;4,000 m/s (&quot;Excellent&quot;). IRC:SP:40 is unverified.
+              </p>
             </div>
 
             {/* Cost inputs */}
