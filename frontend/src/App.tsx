@@ -5,6 +5,7 @@ import { EvidenceCentrePage } from './pages/EvidenceCentrePage';
 import { InspectionWorkbenchPage } from './pages/InspectionWorkbenchPage';
 import { EvidenceGraphPage } from './pages/EvidenceGraphPage';
 import { PlanningCostPage } from './pages/PlanningCostPage';
+import { ProjectPlanningPage } from './pages/ProjectPlanningPage';
 import { SimulatorPage } from './pages/SimulatorPage';
 import { SiteAssistantPage } from './pages/SiteAssistantPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -23,6 +24,7 @@ export default function App() {
 
         <Route path="/evidence-graph" element={<EvidenceGraphPage />} />
         <Route path="/planning" element={<PlanningCostPage />} />
+        <Route path="/project-planning" element={<ProjectPlanningPage />} />
         <Route path="/simulator" element={<SimulatorPage />} />
         <Route path="/assistant" element={<SiteAssistantPage />} />
         <Route path="/settings" element={<SettingsPage />} />
