@@ -71,12 +71,18 @@ const DEMO_PRESET_QUERIES = [
   },
 ];
 
+import { DailySiteBriefingCard } from '../components/DailySiteBriefingCard';
+import { CalendarDays, MessageSquare } from 'lucide-react';
+
 export function SiteAssistantPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlPrompt = searchParams.get('prompt');
   const urlProjectId = searchParams.get('projectId');
   const urlDocId = searchParams.get('docId');
+
+  // Primary Tab: Chatbot vs Daily Morning Briefing
+  const [primaryTab, setPrimaryTab] = useState<'CHAT' | 'BRIEFING'>('CHAT');
 
   // Assistant Mode: Grounded RAG vs Offline Demo
   const [assistantMode, setAssistantMode] = useState<'GROUNDED' | 'DEMO_SYNTHETIC'>('GROUNDED');
@@ -232,7 +238,7 @@ Upload construction documents in the **Evidence Centre** or select a document sc
 
   return (
     <div className="flex flex-col h-full space-y-4">
-      {/* Top Header & Mode Toggle */}
+      {/* Top Header & Tab Switcher */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-surface-border-subtle shrink-0">
         <div>
           <div className="flex items-center gap-2.5">
@@ -240,18 +246,20 @@ Upload construction documents in the **Evidence Centre** or select a document sc
               Site Intelligence Assistant
             </h1>
             <DataProvenanceBadge
-              type={assistantMode === 'GROUNDED' ? 'SOURCE_VERIFIED' : 'DEMO_SYNTHETIC'}
-              label={assistantMode === 'GROUNDED' ? 'GROUNDED RAG ASSISTANT' : 'OFFLINE DEMO CORPUS'}
+              type={primaryTab === 'BRIEFING' ? 'SOURCE_VERIFIED' : (assistantMode === 'GROUNDED' ? 'SOURCE_VERIFIED' : 'DEMO_SYNTHETIC')}
+              label={primaryTab === 'BRIEFING' ? 'DAILY BRIEFING ENGINE' : (assistantMode === 'GROUNDED' ? 'GROUNDED RAG ASSISTANT' : 'OFFLINE DEMO CORPUS')}
             />
           </div>
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-            {assistantMode === 'GROUNDED'
-              ? 'Answers questions strictly grounded in uploaded project documents with verifiable source citations and page references.'
-              : 'Simulated responses from hardcoded IRC specifications and Primavera P6 schedule templates (Milestone 1 demo).'}
+            {primaryTab === 'BRIEFING'
+              ? 'Automated morning site supervisor briefing synthesizing active findings, CPM schedule slips, and meteorological rules.'
+              : (assistantMode === 'GROUNDED'
+                ? 'Answers questions strictly grounded in uploaded project documents with verifiable source citations and page references.'
+                : 'Simulated responses from hardcoded IRC specifications and Primavera P6 schedule templates (Milestone 1 demo).')}
           </p>
         </div>
 
-        {/* Mode Selector Segmented Button */}
+        {/* Primary Tab Selector: Technical Chat vs Daily Briefing */}
         <div
           className="flex p-1 rounded-lg border shrink-0"
           style={{
@@ -260,29 +268,67 @@ Upload construction documents in the **Evidence Centre** or select a document sc
           }}
         >
           <button
-            onClick={() => setAssistantMode('GROUNDED')}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all"
+            onClick={() => setPrimaryTab('CHAT')}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
             style={{
-              background: assistantMode === 'GROUNDED' ? 'var(--color-brand-yellow)' : 'transparent',
-              color: assistantMode === 'GROUNDED' ? '#000' : 'var(--color-text-secondary)',
+              background: primaryTab === 'CHAT' ? 'var(--color-brand-yellow)' : 'transparent',
+              color: primaryTab === 'CHAT' ? '#000' : 'var(--color-text-secondary)',
             }}
           >
-            <BookOpen size={13} />
-            <span>Grounded Documents (RAG)</span>
+            <MessageSquare size={13} />
+            <span>Technical Q&A Assistant</span>
           </button>
           <button
-            onClick={() => setAssistantMode('DEMO_SYNTHETIC')}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all"
+            onClick={() => setPrimaryTab('BRIEFING')}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
             style={{
-              background: assistantMode === 'DEMO_SYNTHETIC' ? 'var(--color-brand-yellow)' : 'transparent',
-              color: assistantMode === 'DEMO_SYNTHETIC' ? '#000' : 'var(--color-text-secondary)',
+              background: primaryTab === 'BRIEFING' ? 'var(--color-brand-yellow)' : 'transparent',
+              color: primaryTab === 'BRIEFING' ? '#000' : 'var(--color-text-secondary)',
             }}
           >
-            <Sparkles size={13} />
-            <span>Synthetic Offline Demo</span>
+            <CalendarDays size={13} />
+            <span>Daily Site Briefing</span>
           </button>
         </div>
       </div>
+
+      {primaryTab === 'BRIEFING' ? (
+        <DailySiteBriefingCard projectId={selectedProjectId} />
+      ) : (
+        <>
+          {/* Sub-mode Selector for Chatbot */}
+          <div className="flex items-center justify-end">
+            <div
+              className="flex p-1 rounded-lg border shrink-0"
+              style={{
+                background: 'var(--color-surface-container-low)',
+                borderColor: 'var(--color-surface-border-subtle)',
+              }}
+            >
+              <button
+                onClick={() => setAssistantMode('GROUNDED')}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                style={{
+                  background: assistantMode === 'GROUNDED' ? 'var(--color-brand-yellow)' : 'transparent',
+                  color: assistantMode === 'GROUNDED' ? '#000' : 'var(--color-text-secondary)',
+                }}
+              >
+                <BookOpen size={13} />
+                <span>Grounded Documents (RAG)</span>
+              </button>
+              <button
+                onClick={() => setAssistantMode('DEMO_SYNTHETIC')}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                style={{
+                  background: assistantMode === 'DEMO_SYNTHETIC' ? 'var(--color-brand-yellow)' : 'transparent',
+                  color: assistantMode === 'DEMO_SYNTHETIC' ? '#000' : 'var(--color-text-secondary)',
+                }}
+              >
+                <Sparkles size={13} />
+                <span>Synthetic Offline Demo</span>
+              </button>
+            </div>
+          </div>
 
       {/* Scope Controls Bar (Project, Document Scope, Provider Status) */}
       <div
@@ -609,6 +655,8 @@ Upload construction documents in the **Evidence Centre** or select a document sc
           <span>Send</span>
         </button>
       </form>
+        </>
+      )}
     </div>
   );
 }
