@@ -3,6 +3,7 @@ import { AppShell } from './components/AppShell';
 import { OverviewPage } from './pages/OverviewPage';
 import { EvidenceCentrePage } from './pages/EvidenceCentrePage';
 import { InspectionWorkbenchPage } from './pages/InspectionWorkbenchPage';
+import { SafetyInspectionPage } from './pages/SafetyInspectionPage';
 import { EvidenceGraphPage } from './pages/EvidenceGraphPage';
 import { PlanningCostPage } from './pages/PlanningCostPage';
 import { ProjectPlanningPage } from './pages/ProjectPlanningPage';
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/inspections/:findingId" element={<InspectionWorkbenchPage />} />
         <Route path="/inspection" element={<Navigate to="/inspections" replace />} />
         <Route path="/inspection/:findingId" element={<InspectionWorkbenchPage />} />
+        <Route path="/safety-inspection" element={<SafetyInspectionPage />} />
 
         <Route path="/evidence-graph" element={<EvidenceGraphPage />} />
         <Route path="/planning" element={<PlanningCostPage />} />

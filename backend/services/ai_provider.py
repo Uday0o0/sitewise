@@ -684,6 +684,17 @@ def validate_and_repair_output(feature: FeatureIdentifier, raw_text: str) -> Tup
     }.get(feature, SafetyMonitoringOutput)
 
     if parsed_json and isinstance(parsed_json, dict):
+        # Normalize list fields that may be strings instead of dicts
+        for list_key in ["worker_hazards", "scaffolding_fall_risks", "environmental_risks"]:
+            if list_key in parsed_json and isinstance(parsed_json[list_key], list):
+                norm_list = []
+                for item in parsed_json[list_key]:
+                    if isinstance(item, dict):
+                        norm_list.append(item)
+                    elif isinstance(item, str):
+                        norm_list.append({"hazard_type": "OBSERVED_HAZARD", "description": item, "severity": "MEDIUM"})
+                parsed_json[list_key] = norm_list
+
         try:
             validated = schema_cls(**parsed_json)
             return validated.model_dump(), "LIVE_AI_MODEL"
