@@ -12,7 +12,7 @@ load_dotenv(_base_dir / ".env")
 load_dotenv(_base_dir.parent / ".env")
 
 from database import init_db
-from routers import projects, findings, graphs, simulator, evidence, documents
+from routers import projects, findings, graphs, simulator, evidence, documents, weather
 
 
 
@@ -44,6 +44,7 @@ app.include_router(graphs.router)
 app.include_router(simulator.router)
 app.include_router(evidence.router)
 app.include_router(documents.router)
+app.include_router(weather.router)
 
 
 

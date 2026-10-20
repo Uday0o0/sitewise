@@ -2,6 +2,7 @@ import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
 import { EngineeringKpiCard } from '../components/EngineeringKpiCard';
 import { DataProvenanceBadge } from '../components/DataProvenanceBadge';
+import { WeatherAdvisoryCard } from '../components/WeatherAdvisoryCard';
 import {
   AlertTriangle, ArrowRight, Clock, FileText, Radio, Loader2,
   TrendingDown, Package, IndianRupee, ClipboardList
@@ -88,6 +89,9 @@ export function OverviewPage() {
           subDescription={`${kpiSummaries.findingsBreakdown.structural} Structural, ${kpiSummaries.findingsBreakdown.safety} Safety, ${kpiSummaries.findingsBreakdown.qaHold} QA Hold`}
         />
       </div>
+
+      {/* Weather-Aware Construction Advisory */}
+      <WeatherAdvisoryCard projectId={data.projectMetadata.projectId} />
 
       {/* Priority Decisions */}
       {priorityDecisions.length > 0 && (
