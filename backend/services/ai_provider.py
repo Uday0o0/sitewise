@@ -19,10 +19,14 @@ Retains lexical passage retrieval in all states.
 from __future__ import annotations
 import os
 import logging
-from typing import Optional
+import json
+import re
+from enum import Enum
+from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass, field
 from pathlib import Path
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, ValidationError
 
 # Search order: backend/.env, then ../.env
 _backend_dir = Path(__file__).resolve().parent.parent
@@ -521,3 +525,295 @@ class MockAIProvider:
             insufficient_evidence=False,
             provider_available=True,
         )
+
+
+# ===========================================================================
+# Activity 4.1, 4.2 & 4.3 — Centralized Reasoning Handler, Output Schemas,
+# Feature Guidelines & Multimodal Capabilities
+# ===========================================================================
+
+class FeatureIdentifier(str, Enum):
+    SAFETY_MONITORING = "safety_monitoring"
+    CRACK_DETECTION = "crack_detection"
+    PLANNING_VALUATION = "planning_valuation"
+    ADVISORY_CHATBOT = "advisory_chatbot"
+
+
+# Activity 4.3: Distinct Reasoning Guidelines
+FEATURE_REASONING_GUIDELINES: Dict[FeatureIdentifier, str] = {
+    FeatureIdentifier.SAFETY_MONITORING: (
+        "Focus strictly on observable worker positioning, proximity to hazardous machinery or open slab edges, "
+        "PPE compliance (safety helmets IS 2925, high-visibility reflective vests IS 15809, fall arrest harnesses), "
+        "scaffolding/guardrails integrity, and environmental worksite hazards (debris, standing water, inadequate lighting). "
+        "Reference OSHA 1926 and BOCW Act 1996 safety regulations where applicable. "
+        "Never presume an unobserved area is safe. Retain human review for all findings."
+    ),
+    FeatureIdentifier.CRACK_DETECTION: (
+        "Analyze crack morphology (longitudinal, transverse, diagonal shear, map crazing), "
+        "structural distress indicators (concrete spalling, exposed oxidized rebar, efflorescence leaching), "
+        "probable root causes (shear stress, flexural bending, plastic shrinkage, foundation settlement), "
+        "and recommended interventions. "
+        "CRITICAL: Keep image-derived pixel/GSD measurements strictly separate from visual interpretation. "
+        "Physical aperture confirmation requires tactile crack gauge inspection."
+    ),
+    FeatureIdentifier.PLANNING_VALUATION: (
+        "Apply standard civil engineering takeoff norms (CPWD DSR), Indian micro-market valuation comparables, "
+        "building age depreciation, commercial vs. residential rental yield benchmarks, and capitalization rates. "
+        "Explicitly disclose all assumptions, benchmark unit costs, and time horizons. "
+        "Do not invent market rates or claim arbitrary precision."
+    ),
+    FeatureIdentifier.ADVISORY_CHATBOT: (
+        "Maintain strict grounding in provided document passages [DOC-N citations] and authoritative "
+        "meteorological safety thresholds (IS 456 Cl. 14, IRC 112, 38 km/h wind limits for lifting). "
+        "If context is insufficient, explicitly decline to answer. "
+        "Never fabricate standards, clauses, or worksite conditions."
+    ),
+}
+
+
+# Activity 4.2: Strict Output Schemas
+class SafetyMonitoringOutput(BaseModel):
+    feature: str = FeatureIdentifier.SAFETY_MONITORING.value
+    overall_risk_level: str = Field(default="MEDIUM", description="LOW | MEDIUM | HIGH | CRITICAL")
+    ppe_compliance: Dict[str, Any] = Field(default_factory=lambda: {
+        "helmets_compliant": True,
+        "vests_compliant": True,
+        "violations": [],
+        "observations": "Visual inspection of observable worksite personnel."
+    })
+    worker_hazards: List[Dict[str, Any]] = Field(default_factory=list)
+    scaffolding_fall_risks: List[Dict[str, Any]] = Field(default_factory=list)
+    environmental_risks: List[Dict[str, Any]] = Field(default_factory=list)
+    corrective_actions: List[str] = Field(default_factory=list)
+    applicable_standards: List[str] = Field(default_factory=lambda: ["OSHA 1926", "BOCW Act 1996", "IS 2925"])
+    uncertainty_disclaimer: str = (
+        "Visual hazard observation only. Does not replace physical site safety officer inspections."
+    )
+
+
+class CrackDetectionOutput(BaseModel):
+    feature: str = FeatureIdentifier.CRACK_DETECTION.value
+    morphology_type: str = Field(default="LONGITUDINAL", description="LONGITUDINAL | TRANSVERSE | DIAGONAL_SHEAR | MAP_CRAZING | SETTLEMENT")
+    probable_cause: str = "Thermal expansion / plastic shrinkage"
+    structural_significance: str = Field(default="MODERATE", description="NEGLIGIBLE | LOW | MODERATE | HIGH | CRITICAL")
+    spalling_or_rebar_exposed: bool = False
+    recommended_interventions: List[str] = Field(default_factory=lambda: [
+        "Seal crack with elastomeric polyurethane sealant",
+        "Install tell-tale crack monitoring gauges for 30 days"
+    ])
+    repair_urgency: str = Field(default="MONITOR_30_DAYS", description="ROUTINE | MONITOR_30_DAYS | IMMEDIATE_ACTION")
+    uncertainty_disclaimer: str = (
+        "Image-derived interpretation only. Tactile crack-gauge physical verification required."
+    )
+
+
+class PlanningValuationOutput(BaseModel):
+    feature: str = FeatureIdentifier.PLANNING_VALUATION.value
+    summary: str = "Civil planning and valuation assessment"
+    confidence_score: float = Field(default=0.85, ge=0.0, le=1.0)
+    key_assumptions: List[str] = Field(default_factory=lambda: [
+        "CPWD Delhi Schedule of Rates (DSR) civil takeoff benchmarks",
+        "Standard 5-year capital appreciation projection basis"
+    ])
+    sensitivity_factors: List[str] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+
+
+class AdvisoryChatbotOutput(BaseModel):
+    feature: str = FeatureIdentifier.ADVISORY_CHATBOT.value
+    answer: str = "Answer grounded in project documentation"
+    citations: List[Dict[str, Any]] = Field(default_factory=list)
+    is_grounded: bool = True
+    insufficient_evidence: bool = False
+    disclaimer: str = "Grounded in ingested project documentation."
+
+
+@dataclass
+class ReasoningRequest:
+    feature: FeatureIdentifier
+    prompt: str
+    image_bytes: Optional[bytes] = None
+    image_mime: str = "image/jpeg"
+    context_data: Optional[Dict[str, Any]] = None
+    system_instruction_override: Optional[str] = None
+
+
+@dataclass
+class ReasoningResponse:
+    feature: FeatureIdentifier
+    status: str  # SUCCESS | SCHEMA_REPAIR_FALLBACK | PROVIDER_UNAVAILABLE
+    provenance: str  # LIVE_AI_MODEL | AI_INFERRED | SYNTHETIC_DEMO | PROVIDER_UNAVAILABLE
+    provider: str
+    model: str
+    raw_output: str
+    validated_data: Dict[str, Any]
+    error: Optional[str] = None
+    latency_ms: int = 0
+
+
+def validate_and_repair_output(feature: FeatureIdentifier, raw_text: str) -> Tuple[Dict[str, Any], str]:
+    """Parse, normalize, and validate AI output against feature-specific schema.
+    
+    If model output is malformed or missing fields, applies bounded repair
+    and returns compliant dictionary with provenance 'SCHEMA_REPAIR_FALLBACK'
+    or 'LIVE_AI_MODEL'.
+    """
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+        cleaned = cleaned.strip()
+
+    parsed_json = None
+    try:
+        parsed_json = json.loads(cleaned)
+    except Exception:
+        # Bounded regex JSON extraction
+        m = re.search(r"(\{.*\})", cleaned, re.DOTALL)
+        if m:
+            try:
+                parsed_json = json.loads(m.group(1))
+            except Exception:
+                pass
+
+    schema_cls = {
+        FeatureIdentifier.SAFETY_MONITORING: SafetyMonitoringOutput,
+        FeatureIdentifier.CRACK_DETECTION: CrackDetectionOutput,
+        FeatureIdentifier.PLANNING_VALUATION: PlanningValuationOutput,
+        FeatureIdentifier.ADVISORY_CHATBOT: AdvisoryChatbotOutput,
+    }.get(feature, SafetyMonitoringOutput)
+
+    if parsed_json and isinstance(parsed_json, dict):
+        try:
+            validated = schema_cls(**parsed_json)
+            return validated.model_dump(), "LIVE_AI_MODEL"
+        except ValidationError as ve:
+            logger.warning(f"Schema validation warning for {feature.value}: {ve}; performing bounded repair.")
+            # Bounded repair: merge valid fields into default schema instance
+            defaults = schema_cls().model_dump()
+            for k, v in parsed_json.items():
+                if k in defaults and v is not None:
+                    defaults[k] = v
+            return defaults, "SCHEMA_REPAIR_FALLBACK"
+
+    # Total JSON failure fallback
+    logger.warning(f"Malformed non-JSON output for {feature.value}; utilizing deterministic fallback.")
+    fallback = schema_cls().model_dump()
+    if feature == FeatureIdentifier.ADVISORY_CHATBOT:
+        fallback["answer"] = raw_text[:500] if raw_text else "No response generated."
+    return fallback, "SCHEMA_REPAIR_FALLBACK"
+
+
+async def execute_reasoning(request: ReasoningRequest) -> ReasoningResponse:
+    """Centralized typed handler supporting text-only and image-plus-text reasoning calls.
+    
+    Routes through active provider with strict Activity 4.3 domain reasoning guidelines,
+    enforces Pydantic schema validation after generation, and applies bounded repair.
+    """
+    import time
+    start_time = time.time()
+    
+    provider_name = get_active_provider_name()
+    model_name = get_active_model_name()
+    guideline = FEATURE_REASONING_GUIDELINES.get(request.feature, "")
+
+    if not is_provider_available():
+        fallback_data, _ = validate_and_repair_output(request.feature, "")
+        return ReasoningResponse(
+            feature=request.feature,
+            status="PROVIDER_UNAVAILABLE",
+            provenance="PROVIDER_UNAVAILABLE",
+            provider=provider_name,
+            model=model_name,
+            raw_output="",
+            validated_data=fallback_data,
+            error=f"AI provider ({provider_name}) not configured with API credentials.",
+            latency_ms=0
+        )
+
+    # Compile system prompt incorporating Activity 4.3 reasoning guidelines and JSON schema demand
+    schema_cls = {
+        FeatureIdentifier.SAFETY_MONITORING: SafetyMonitoringOutput,
+        FeatureIdentifier.CRACK_DETECTION: CrackDetectionOutput,
+        FeatureIdentifier.PLANNING_VALUATION: PlanningValuationOutput,
+        FeatureIdentifier.ADVISORY_CHATBOT: AdvisoryChatbotOutput,
+    }.get(request.feature, SafetyMonitoringOutput)
+    
+    schema_sample = json.dumps(schema_cls().model_dump(), indent=2)
+    system_prompt = (
+        f"You are the SITEWISE Construction Intelligence Reasoning Engine for {request.feature.value.upper()}.\n\n"
+        f"DOMAIN REASONING GUIDELINES:\n{guideline}\n\n"
+        f"CRITICAL OUTPUT FORMAT:\n"
+        f"You MUST respond ONLY with a single JSON object conforming strictly to this schema:\n"
+        f"{schema_sample}\n"
+        f"Do NOT include markdown explanations outside the JSON."
+    )
+
+    user_content = request.prompt
+    if request.context_data:
+        user_content += f"\n\nContext Data:\n{json.dumps(request.context_data, indent=2)}"
+
+    raw_output = ""
+    error_msg = None
+
+    try:
+        if provider_name == "groq":
+            from groq import AsyncGroq
+            active_key = os.getenv("GROQ_API_KEY", GROQ_API_KEY)
+            groq_client = AsyncGroq(api_key=active_key, timeout=AI_REQUEST_TIMEOUT)
+            
+            # If image bytes provided, include image metadata context
+            if request.image_bytes:
+                user_content += f"\n[Multimodal Image Attachment: {len(request.image_bytes)} bytes, MIME: {request.image_mime}]"
+
+            completion = await groq_client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content}
+                ],
+                model=model_name,
+                temperature=0.2,
+                max_tokens=GROQ_MAX_OUTPUT_TOKENS
+            )
+            raw_output = completion.choices[0].message.content or ""
+            
+        elif provider_name == "gemini":
+            import google.generativeai as genai
+            active_key = os.getenv("GEMINI_API_KEY", GEMINI_API_KEY)
+            genai.configure(api_key=active_key)
+            gemini_model = genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction=system_prompt
+            )
+            
+            contents: list[Any] = [user_content]
+            if request.image_bytes:
+                contents.append({"mime_type": request.image_mime, "data": request.image_bytes})
+                
+            response = await gemini_model.generate_content_async(contents)
+            raw_output = response.text or ""
+
+    except Exception as exc:
+        logger.error(f"Reasoning provider execution failed: {exc}", exc_info=True)
+        error_msg = str(exc)
+
+    elapsed_ms = int((time.time() - start_time) * 1000)
+    validated_data, prov_tag = validate_and_repair_output(request.feature, raw_output)
+    
+    status = "SUCCESS" if raw_output and not error_msg and prov_tag == "LIVE_AI_MODEL" else "SCHEMA_REPAIR_FALLBACK"
+    if error_msg:
+        status = "PROVIDER_ERROR"
+        prov_tag = "SYNTHETIC_DEMO"
+
+    return ReasoningResponse(
+        feature=request.feature,
+        status=status,
+        provenance=prov_tag,
+        provider=provider_name,
+        model=model_name,
+        raw_output=raw_output,
+        validated_data=validated_data,
+        error=error_msg,
+        latency_ms=elapsed_ms
+    )
+
