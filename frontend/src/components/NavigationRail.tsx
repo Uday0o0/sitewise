@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileSearch, ClipboardCheck, GitBranch,
   CalendarClock, FlaskConical, MessageSquare, Settings, PanelLeftClose, PanelLeft,
-  Compass,
+  Compass, Building2,
 } from 'lucide-react';
 
 interface NavigationRailProps {
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { path: '/evidence-graph', label: 'Evidence Graph', icon: GitBranch },
   { path: '/planning', label: 'Planning & Cost', icon: CalendarClock },
   { path: '/project-planning', label: 'Project Planning', icon: Compass },
+  { path: '/valuation', label: 'Property Valuation', icon: Building2 },
   { path: '/simulator', label: 'What-if Simulator', icon: FlaskConical },
   { path: '/assistant', label: 'Site Assistant', icon: MessageSquare },
   { path: '/settings', label: 'Settings', icon: Settings },
