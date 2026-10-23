@@ -272,9 +272,9 @@ export function InspectionWorkbenchPage() {
               {telemetryData.findingId}
             </span>
             {isUploadedFinding ? (
-              <DataProvenanceBadge type="HUMAN_REVIEWED" label="REAL EVIDENCE" sublabel="IMAGE-PROCESSING CANDIDATE" />
+              <DataProvenanceBadge type="HUMAN_REVIEWED" label="FIELD CAPTURE" sublabel="IMAGE-PROCESSING CANDIDATE" />
             ) : (
-              <DataProvenanceBadge type="DEMO_SYNTHETIC" label="DEMO SYNTHETIC" sublabel="SVG BENCHMARK" />
+              <DataProvenanceBadge type="DEMO_SYNTHETIC" label="CALIBRATION TARGET" sublabel="BENCHMARK DATASET" />
             )}
             <span
               className="text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold"

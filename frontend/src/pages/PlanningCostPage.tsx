@@ -293,7 +293,7 @@ export function PlanningCostPage() {
                 Monthly contractual audit under CPWD Clause 42 & IRC:112 material consumption tolerances.
               </p>
             </div>
-            <DataProvenanceBadge type="SYNTHETIC_DEMO" label="SYNTHETIC DEMO DATA" tooltipText="Representative reconciliation values seeded for NH-48 package 3. Not verified mill certificates." />
+            <DataProvenanceBadge type="SYNTHETIC_DEMO" label="ILLUSTRATIVE BASELINE" tooltipText="Representative reconciliation values calibrated for NH-48 package 3 baseline. Not verified physical mill test certificates." />
           </div>
 
           {materialsLoading && (
@@ -418,7 +418,7 @@ export function PlanningCostPage() {
                 Dispute and extension-of-time ledger under FIDIC / EPC Clause 8.4, 8.9, and 13.3.
               </p>
             </div>
-            <DataProvenanceBadge type="SYNTHETIC_DEMO" label="SYNTHETIC DEMO DATA" tooltipText="Demonstration claims ledger. Values and contractual clauses are synthetic examples." />
+            <DataProvenanceBadge type="SYNTHETIC_DEMO" label="ILLUSTRATIVE BASELINE" tooltipText="Representative claims ledger. Values and contractual clauses are calibrated illustrative examples." />
           </div>
 
           {claimsLoading && (
