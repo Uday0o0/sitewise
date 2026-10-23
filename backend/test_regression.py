@@ -5,13 +5,25 @@ validation guardrails, and SQLite persistence.
 """
 
 import pytest
+import io
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from main import app
 from database import engine, async_session, Base
-from seed import seed
-from models import Finding, SimulatorCommit
+from seed import seed, calculate_material_variance, seed_planning_demo_records
+from models import (
+    Finding,
+    SimulatorCommit,
+    Project,
+    MaterialReconciliation,
+    ContractorClaim,
+    GraphNode,
+    GraphEdge,
+    FindingEvidenceLink,
+    DocumentPassage,
+)
 from sqlalchemy import select
+from test_milestone1 import generate_synthetic_image
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -474,3 +486,374 @@ async def test_09_demo_data_integrity_and_provenance_audit():
         assert "UNVERIFIED" in node_map["N-MIT-001"]["codeReference"]
 
 
+@pytest.mark.asyncio
+async def test_10_planning_materials_and_claims_api():
+    """
+    Test Planning & Valuation API endpoints:
+    1. Both endpoints return expected seeded records for NH-48 project.
+    2. Empty results for an existing project with no records.
+    3. 404 for unknown/nonexistent project IDs.
+    4. Project isolation (no data leakage across projects).
+    5. Variance calculation formula and zero theoretical quantity handling.
+    6. Synthetic provenance flags and idempotent seeding.
+    """
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # ── 1. Both endpoints return expected records for PRJ-NH48-PKG3 ──
+        res_mat = await ac.get("/api/v4/projects/PRJ-NH48-PKG3/materials/reconciliation")
+        assert res_mat.status_code == 200
+        mat_data = res_mat.json()
+        assert mat_data["projectId"] == "PRJ-NH48-PKG3"
+        assert mat_data["totalItems"] == 5
+        assert mat_data["compliantCount"] == 4
+        assert mat_data["overconsumedCount"] == 1
+        assert mat_data["savingCount"] == 0
+
+        # Verify specific items
+        tmt = next(m for m in mat_data["items"] if m["materialCode"] == "TMT-FE550D")
+        assert tmt["materialName"] == "Thermo-Mechanically Treated Rebar (Fe 550D)"
+        assert tmt["unit"] == "MT"
+        assert tmt["theoreticalQuantity"] == 3620.0
+        assert tmt["actualIssuedQuantity"] == 3410.0
+        assert tmt["varianceQuantity"] == -210.0
+        assert tmt["variancePercent"] == -5.8
+        assert tmt["status"] == "COMPLIANT"
+        assert tmt["provenance"] == "SYNTHETIC_DEMO"
+
+        lrpc = next(m for m in mat_data["items"] if m["materialCode"] == "LRPC-15.2MM")
+        assert lrpc["theoreticalQuantity"] == 420.0
+        assert lrpc["actualIssuedQuantity"] == 448.0
+        assert lrpc["variancePercent"] == 6.7
+        assert lrpc["status"] == "OVERCONSUMED"
+        assert lrpc["provenance"] == "SYNTHETIC_DEMO"
+
+        # Verify all material items have SYNTHETIC_DEMO provenance
+        for item in mat_data["items"]:
+            assert item["provenance"] == "SYNTHETIC_DEMO"
+
+        # Verify claims endpoint
+        res_claims = await ac.get("/api/v4/projects/PRJ-NH48-PKG3/claims")
+        assert res_claims.status_code == 200
+        claims_data = res_claims.json()
+        assert claims_data["projectId"] == "PRJ-NH48-PKG3"
+        assert claims_data["totalClaims"] == 3
+        assert claims_data["totalClaimedAmountInrLakhs"] == 26.8
+        assert claims_data["totalAssessedExposureInrLakhs"] == 11.55
+
+        # Check CLM-2024-019 linked to FND-104
+        clm19 = next(c for c in claims_data["claims"] if c["id"] == "CLM-2024-019")
+        assert clm19["contractorName"] == "HCC-NCC JV"
+        assert "FIDIC" in clm19["clauseReference"]
+        assert clm19["claimedAmountInrLakhs"] == 12.4
+        assert clm19["assessedExposureInrLakhs"] == 4.85
+        assert clm19["status"] == "UNDER_TECHNICAL_EVALUATION"
+        assert clm19["linkedFindingId"] == "FND-104"
+        assert clm19["provenance"] == "SYNTHETIC_DEMO"
+
+        # All claims must be marked SYNTHETIC_DEMO
+        for claim in claims_data["claims"]:
+            assert claim["provenance"] == "SYNTHETIC_DEMO"
+
+        # ── 2. Unknown project IDs return 404 ──
+        res_unknown_mat = await ac.get("/api/v4/projects/PRJ-DOES-NOT-EXIST/materials/reconciliation")
+        assert res_unknown_mat.status_code == 404
+        res_unknown_clm = await ac.get("/api/v4/projects/PRJ-DOES-NOT-EXIST/claims")
+        assert res_unknown_clm.status_code == 404
+
+        # ── 3. Empty results for an existing project with no records ──
+        async with async_session() as s:
+            empty_prj = Project(
+                id="PRJ-EMPTY-RECORD",
+                name="Empty Test Project",
+                package_id="PKG-EMPTY",
+                chainage_start_meters=0,
+                chainage_end_meters=1000,
+                is_demo_dataset=True,
+                data_sync_timestamp="2024-11-14T06:30:00Z",
+            )
+            s.add(empty_prj)
+            await s.commit()
+
+        res_empty_mat = await ac.get("/api/v4/projects/PRJ-EMPTY-RECORD/materials/reconciliation")
+        assert res_empty_mat.status_code == 200
+        assert res_empty_mat.json()["totalItems"] == 0
+        assert res_empty_mat.json()["items"] == []
+
+        res_empty_clm = await ac.get("/api/v4/projects/PRJ-EMPTY-RECORD/claims")
+        assert res_empty_clm.status_code == 200
+        assert res_empty_clm.json()["totalClaims"] == 0
+        assert res_empty_clm.json()["claims"] == []
+
+        # ── 4. Project isolation (no data leakage across projects) ──
+        async with async_session() as s:
+            prj_b = Project(
+                id="PRJ-CORRIDOR-B",
+                name="Corridor B Package",
+                package_id="PKG-B",
+                chainage_start_meters=5000,
+                chainage_end_meters=10000,
+                is_demo_dataset=True,
+                data_sync_timestamp="2024-11-14T06:30:00Z",
+            )
+            s.add(prj_b)
+            # Add 1 distinct material and 1 distinct claim for Corridor B
+            mat_b = MaterialReconciliation(
+                project_id="PRJ-CORRIDOR-B",
+                material_code="FLYASH-GR1",
+                material_name="Pulverized Fuel Ash (Grade 1)",
+                spec_code="IS:3812 Part 1",
+                unit="MT",
+                theoretical_quantity=500.0,
+                actual_issued_quantity=490.0,
+                variance_quantity=-10.0,
+                variance_percent=-2.0,
+                contractual_band="Within ±5.0% band",
+                status="COMPLIANT",
+                provenance="SYNTHETIC_DEMO",
+            )
+            clm_b = ContractorClaim(
+                id="CLM-PKGB-001",
+                project_id="PRJ-CORRIDOR-B",
+                contractor_name="L&T Construction",
+                clause_reference="EPC Clause 10.1",
+                claimed_amount_inr=300000.0,
+                claimed_amount_inr_lakhs=3.0,
+                assessed_exposure_inr=150000.0,
+                assessed_exposure_inr_lakhs=1.5,
+                status="UNDER_TECHNICAL_EVALUATION",
+                linked_finding_id=None,
+                description="Borehole utility delay claim.",
+                provenance="SYNTHETIC_DEMO",
+            )
+            s.add_all([mat_b, clm_b])
+            await s.commit()
+
+        # Query PRJ-CORRIDOR-B
+        res_b_mat = await ac.get("/api/v4/projects/PRJ-CORRIDOR-B/materials/reconciliation")
+        assert res_b_mat.status_code == 200
+        b_mat_items = res_b_mat.json()["items"]
+        assert len(b_mat_items) == 1
+        assert b_mat_items[0]["materialCode"] == "FLYASH-GR1"
+        # None of NH-48 materials should appear in Corridor B
+        assert not any(m["materialCode"] == "TMT-FE550D" for m in b_mat_items)
+
+        res_b_clm = await ac.get("/api/v4/projects/PRJ-CORRIDOR-B/claims")
+        assert res_b_clm.status_code == 200
+        b_clm_items = res_b_clm.json()["claims"]
+        assert len(b_clm_items) == 1
+        assert b_clm_items[0]["id"] == "CLM-PKGB-001"
+        # None of NH-48 claims should appear in Corridor B
+        assert not any(c["id"] == "CLM-2024-019" for c in b_clm_items)
+
+        # ── 5. Variance calculations and zero-theoretical-quantity handling ──
+        # Standard positive variance
+        v_qty, v_pct = calculate_material_variance(100.0, 105.0)
+        assert v_qty == 5.0
+        assert v_pct == 5.0
+
+        # Standard negative variance
+        v_qty, v_pct = calculate_material_variance(200.0, 180.0)
+        assert v_qty == -20.0
+        assert v_pct == -10.0
+
+        # Zero theoretical quantity (safeguard against division by zero)
+        v_qty, v_pct = calculate_material_variance(0.0, 50.0)
+        assert v_qty == 50.0
+        assert v_pct == 0.0
+
+        # None theoretical quantity
+        v_qty, v_pct = calculate_material_variance(None, 50.0)
+        assert v_qty == 50.0
+        assert v_pct == 0.0
+
+        # ── 6. Repeatable / idempotent seeding ──
+        async with async_session() as s:
+            # Call seed_planning_demo_records again on NH-48
+            await seed_planning_demo_records(s, "PRJ-NH48-PKG3")
+            await s.commit()
+
+            # Verify count has not multiplied
+            res_mat_check = await s.execute(
+                select(MaterialReconciliation).where(MaterialReconciliation.project_id == "PRJ-NH48-PKG3")
+            )
+            assert len(res_mat_check.scalars().all()) == 5
+
+            res_clm_check = await s.execute(
+                select(ContractorClaim).where(ContractorClaim.project_id == "PRJ-NH48-PKG3")
+            )
+            assert len(res_clm_check.scalars().all()) == 3
+
+
+@pytest.mark.asyncio
+async def test_11_automatic_evidence_graph_generation():
+    """
+    Test Automatic Evidence Graph Generation for newly created findings:
+    1. Automatic graph creation on finding upload (evidence-absent baseline).
+    2. Strict provenance guardrail: FINDING + RISK created, NEVER fabricate source EVIDENCE node.
+    3. Graph topology retrieval by graph_id and by finding_id.
+    4. Evidence-present graph update: attaching real source evidence creates EVIDENCE node & EVIDENCES edge.
+    5. Idempotency: repeated generation calls produce zero duplicate nodes or edges.
+    6. Project isolation: cross-project queries reject mismatched graphs.
+    7. Regression protection: GR-FND104 5-tier topology remains pristine.
+    """
+    from services.graph_generator import generate_or_get_evidence_graph
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # ── 1. Create Finding via Upload & verify Automatic Graph Generation ──
+        jpeg_bytes = generate_synthetic_image("JPEG", line_thickness=3)
+        res_upload = await ac.post(
+            "/api/v4/findings/upload",
+            files={"file": ("auto_graph_test.jpg", jpeg_bytes, "image/jpeg")},
+            data={"structureElement": "Pier 26 Crossbeam Shear Zone", "gsdMmPerPx": "0.65"},
+        )
+        assert res_upload.status_code == 200
+        upload_data = res_upload.json()
+        fnd_id = upload_data["findingId"]
+        graph_id = upload_data.get("graphId")
+
+        assert graph_id is not None
+        assert graph_id.startswith("GR-")
+
+        # Verify telemetry returns the associated graphId
+        res_telemetry = await ac.get(f"/api/v4/findings/{fnd_id}/telemetry")
+        assert res_telemetry.status_code == 200
+        telemetry_data = res_telemetry.json()
+        assert telemetry_data["graphId"] == graph_id
+
+        # ── 2. Evidence-Absent Graph Structure ──
+        res_graph = await ac.get(f"/api/v4/graphs/{graph_id}")
+        assert res_graph.status_code == 200
+        graph_data = res_graph.json()
+        assert graph_data["graphId"] == graph_id
+
+        nodes = graph_data["nodes"]
+        edges = graph_data["connections"]
+
+        # Exactly 2 nodes: FINDING and RISK. NO FABRICATED EVIDENCE NODE.
+        assert len(nodes) == 2, f"Expected exactly 2 nodes for evidence-absent graph, got {len(nodes)}"
+        node_types = {n["nodeType"] for n in nodes}
+        assert "FINDING" in node_types
+        assert "RISK" in node_types
+        assert "EVIDENCE" not in node_types, "Fabricated EVIDENCE node found without real source documents!"
+
+        finding_node = next(n for n in nodes if n["nodeType"] == "FINDING")
+        risk_node = next(n for n in nodes if n["nodeType"] == "RISK")
+
+        assert finding_node["tier"] == 2
+        assert finding_node["findingId"] == fnd_id
+        assert finding_node["provenance"] in ["HUMAN_REVIEWED", "AI_INFERRED"]
+
+        # Provenance rule: Inferred risk must NOT be marked SOURCE_VERIFIED
+        assert risk_node["tier"] == 3
+        assert risk_node["provenance"] in ["AI_INFERRED", "CALCULATED"]
+        assert risk_node["provenance"] != "SOURCE_VERIFIED", "Inferred risk cannot be marked SOURCE_VERIFIED"
+
+        # Exactly 1 edge: TRIGGERS from FINDING to RISK
+        assert len(edges) == 1
+        edge = edges[0]
+        assert edge["sourceNodeId"] == finding_node["id"]
+        assert edge["targetNodeId"] == risk_node["id"]
+        assert edge["relationshipType"] == "TRIGGERS"
+        assert edge["provenance"] == "AI_INFERRED"
+
+        # ── 3. Graph Retrieval by Finding ID Route ──
+        res_by_fnd = await ac.get(f"/api/v4/graphs/by-finding/{fnd_id}")
+        assert res_by_fnd.status_code == 200
+        assert res_by_fnd.json()["graphId"] == graph_id
+
+        # ── 4. Evidence-Present Case: Link Real Ingested Document ──
+        doc_content = b"Pier 26 Crossbeam Field Report: Core compressive strength tested at 34.2 MPa. Ultrasonic pulse velocity measured 3920 m/s."
+        up_doc = await ac.post(
+            "/api/v4/projects/PRJ-NH48-PKG3/documents/upload",
+            files={"file": ("pier26_field_report.txt", io.BytesIO(doc_content), "text/plain")},
+        )
+        assert up_doc.status_code == 201
+        doc_id = up_doc.json()["documentId"]
+
+        # Resolve passage ID
+        async with async_session() as s:
+            pas_res = await s.execute(select(DocumentPassage).where(DocumentPassage.document_id == doc_id))
+            passage = pas_res.scalar_one()
+            passage_id = passage.id
+
+        # Attach real evidence link to finding
+        link_payload = {
+            "documentId": doc_id,
+            "passageId": passage_id,
+            "citationText": "Core compressive strength tested at 34.2 MPa",
+            "relevanceNote": "Direct structural core sampling",
+            "provenance": "SOURCE_VERIFIED",
+            "confidence": 0.98,
+        }
+        res_link = await ac.post(f"/api/v4/findings/{fnd_id}/evidence-links", json=link_payload)
+        assert res_link.status_code == 201
+
+        # Fetch graph again — EVIDENCE node must now be dynamically linked
+        res_g_updated = await ac.get(f"/api/v4/graphs/{graph_id}")
+        assert res_g_updated.status_code == 200
+        updated_data = res_g_updated.json()
+        u_nodes = updated_data["nodes"]
+        u_edges = updated_data["connections"]
+
+        assert len(u_nodes) == 3, f"Expected 3 nodes (EVIDENCE, FINDING, RISK), got {len(u_nodes)}"
+        evidence_node = next(n for n in u_nodes if n["nodeType"] == "EVIDENCE")
+        assert evidence_node["tier"] == 1
+        assert evidence_node["provenance"] == "SOURCE_VERIFIED"
+        assert evidence_node["documentId"] == doc_id
+        assert evidence_node["passageId"] == passage_id
+
+        # Connections: 2 edges (EVIDENCES + TRIGGERS)
+        assert len(u_edges) == 2
+        ev_edge = next(e for e in u_edges if e["relationshipType"] == "EVIDENCES")
+        assert ev_edge["sourceNodeId"] == evidence_node["id"]
+        assert ev_edge["targetNodeId"] == finding_node["id"]
+        assert ev_edge["provenance"] == "SOURCE_VERIFIED"
+
+        # ── 5. Idempotency: Duplicate calls produce zero duplicate nodes/edges ──
+        async with async_session() as s:
+            fnd_record = (await s.execute(select(Finding).where(Finding.id == fnd_id))).scalar_one()
+            # Call generator again
+            regen_graph_id = await generate_or_get_evidence_graph(fnd_record, s)
+            await s.commit()
+            assert regen_graph_id == graph_id
+
+            # Verify node and edge counts in DB remain unchanged
+            db_nodes = (await s.execute(select(GraphNode).where(GraphNode.graph_id == graph_id))).scalars().all()
+            db_edges = (await s.execute(select(GraphEdge).where(GraphEdge.graph_id == graph_id))).scalars().all()
+            assert len(db_nodes) == 3
+            assert len(db_edges) == 2
+
+        # ── 6. Project Isolation Guardrails ──
+        # Graph query with mismatched project must return 404
+        res_mismatch = await ac.get(f"/api/v4/graphs/{graph_id}?project_id=PRJ-OTHER-NONEXISTENT")
+        assert res_mismatch.status_code == 404
+
+        # ── 7. Regression Protection for Seeded Baseline GR-FND104 ──
+        res_104 = await ac.get("/api/v4/graphs/GR-FND104")
+        assert res_104.status_code == 200
+        g104 = res_104.json()
+
+        assert len(g104["nodes"]) == 5, f"GR-FND104 must maintain 5 tiers, got {len(g104['nodes'])}"
+        assert len(g104["connections"]) == 4, f"GR-FND104 must maintain 4 connections, got {len(g104['connections'])}"
+
+        node_map = {n["id"]: n for n in g104["nodes"]}
+        assert set(node_map.keys()) == {"N-SRC-001", "N-AI-001", "N-RSK-042", "N-CPM-001", "N-MIT-001"}
+
+        assert node_map["N-SRC-001"]["tier"] == 1
+        assert node_map["N-SRC-001"]["provenance"] == "SOURCE_VERIFIED"
+        assert node_map["N-SRC-001"]["nodeType"] == "EVIDENCE"
+
+        assert node_map["N-AI-001"]["tier"] == 2
+        assert node_map["N-AI-001"]["provenance"] == "AI_INFERRED"
+        assert node_map["N-AI-001"]["nodeType"] == "FINDING"
+
+        assert node_map["N-RSK-042"]["tier"] == 3
+        assert node_map["N-RSK-042"]["provenance"] == "CALCULATED_RISK"
+        assert node_map["N-RSK-042"]["nodeType"] == "RISK"
+
+        assert node_map["N-CPM-001"]["tier"] == 4
+        assert node_map["N-CPM-001"]["provenance"] == "CALCULATED_RISK"
+        assert node_map["N-CPM-001"]["nodeType"] in ["IMPACT", "CPM_IMPACT"]
+
+        assert node_map["N-MIT-001"]["tier"] == 5
+        assert node_map["N-MIT-001"]["provenance"] == "PROPOSED_ACTION"
+        assert node_map["N-MIT-001"]["nodeType"] in ["ACTION", "MITIGATION"]

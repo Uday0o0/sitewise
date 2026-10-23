@@ -22,6 +22,8 @@ class Project(Base):
     evidence_assets = relationship("EvidenceAsset", back_populates="project")
     sensors = relationship("UnconfiguredSensor", back_populates="project")
     documents = relationship("Document", back_populates="project")
+    materials_reconciliation = relationship("MaterialReconciliation", back_populates="project")
+    contractor_claims = relationship("ContractorClaim", back_populates="project")
 
 
 class Finding(Base):
@@ -315,5 +317,49 @@ class DocumentPassage(Base):
     extractor_version = Column(String, default="1.0.0")
 
     document = relationship("Document", back_populates="passages")
+
+
+class MaterialReconciliation(Base):
+    """Certified material consumption and variance reconciliation per CPWD / IRC standards."""
+    __tablename__ = "material_reconciliations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    material_code = Column(String, nullable=False)
+    material_name = Column(String, nullable=False)
+    spec_code = Column(String, nullable=False)
+    unit = Column(String, nullable=False)
+    theoretical_quantity = Column(Float, nullable=False)
+    actual_issued_quantity = Column(Float, nullable=False)
+    variance_quantity = Column(Float, nullable=False)
+    variance_percent = Column(Float, nullable=False)
+    contractual_band = Column(String, nullable=False)
+    status = Column(String, nullable=False)  # COMPLIANT | OVERCONSUMED | SAVING
+    provenance = Column(String, nullable=False, default="SYNTHETIC_DEMO")
+    source_reference = Column(String, nullable=True)
+
+    project = relationship("Project", back_populates="materials_reconciliation")
+
+
+class ContractorClaim(Base):
+    """Contractor commercial / extension-of-time claims under contract clauses."""
+    __tablename__ = "contractor_claims"
+
+    id = Column(String, primary_key=True)  # Claim reference ID e.g. CLM-2024-019
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    contractor_name = Column(String, nullable=False)
+    clause_reference = Column(String, nullable=False)
+    claimed_amount_inr = Column(Float, nullable=False)
+    claimed_amount_inr_lakhs = Column(Float, nullable=False)
+    assessed_exposure_inr = Column(Float, nullable=False)
+    assessed_exposure_inr_lakhs = Column(Float, nullable=False)
+    status = Column(String, nullable=False)  # UNDER_TECHNICAL_EVALUATION | PROPOSED_REJECTION | NEGOTIATION
+    linked_finding_id = Column(String, nullable=True)
+    description = Column(Text, nullable=False)
+    provenance = Column(String, nullable=False, default="SYNTHETIC_DEMO")
+    source_reference = Column(String, nullable=True)
+
+    project = relationship("Project", back_populates="contractor_claims")
+
 
 

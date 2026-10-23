@@ -13,6 +13,8 @@ import {
   Clock,
   Layers,
   MapPin,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { DataProvenanceBadge } from './DataProvenanceBadge';
 
@@ -177,15 +179,24 @@ export function RealEstateValuationCard({ projectId = 'PRJ-NH48-PKG3' }: { proje
           <button
             onClick={calculateValuation}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors self-start md:self-auto"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors self-start md:self-auto disabled:opacity-60"
             style={{
               background: 'var(--color-brand-yellow)',
               color: 'var(--color-surface-base)',
               fontFamily: 'var(--font-display)',
             }}
           >
-            <Sparkles size={13} />
-            <span>Calculate Property Valuation</span>
+            {loading ? (
+              <>
+                <Loader2 size={13} className="animate-spin" />
+                <span>Calculating Valuation...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={13} />
+                <span>Calculate Property Valuation</span>
+              </>
+            )}
           </button>
         </div>
 
@@ -289,6 +300,47 @@ export function RealEstateValuationCard({ projectId = 'PRJ-NH48-PKG3' }: { proje
           </div>
         </div>
       </div>
+
+      {/* Error Alert Display */}
+      {error && (
+        <div
+          className="rounded-lg p-4 border flex items-start gap-3"
+          style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            borderColor: 'rgba(239, 68, 68, 0.3)',
+            color: '#FCA5A5',
+          }}
+        >
+          <AlertTriangle size={18} className="shrink-0 mt-0.5 text-rose-400" />
+          <div className="space-y-1">
+            <div className="font-semibold text-xs text-rose-300">Valuation Engine Notice</div>
+            <div className="text-xs opacity-90">{error}</div>
+            <button
+              onClick={calculateValuation}
+              className="mt-2 px-2.5 py-1 rounded text-[11px] font-medium bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 transition-colors cursor-pointer border border-rose-500/40"
+            >
+              Retry Calculation
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Placeholder */}
+      {loading && !valuation && (
+        <div
+          className="rounded-lg p-8 border text-center space-y-3"
+          style={{
+            background: 'var(--color-surface-container-low)',
+            borderColor: 'var(--color-surface-border-subtle)',
+          }}
+        >
+          <Loader2 size={32} className="animate-spin mx-auto text-amber-400" />
+          <div className="text-sm font-semibold text-gray-200">Processing Micro-Market Valuation Comps...</div>
+          <div className="text-xs text-gray-400 max-w-sm mx-auto">
+            Evaluating area metrics, age depreciation schedules, amenity scoring, and 5-year capital appreciation curves.
+          </div>
+        </div>
+      )}
 
       {/* Valuation Results Display */}
       {valuation && (

@@ -35,7 +35,35 @@ from schemas import (
 router = APIRouter(prefix="/api/v4/graphs", tags=["graphs"])
 
 
+@router.get("/by-finding/{finding_id}", response_model=EvidenceGraphResponse)
+async def get_graph_by_finding(
+    finding_id: str,
+    project_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Retrieve or automatically generate Evidence Graph for a specific finding.
+    Enforces project isolation.
+    """
+    stmt = select(Finding).where(Finding.id == finding_id)
+    if project_id:
+        stmt = stmt.where(Finding.project_id == project_id)
+    fnd = (await db.execute(stmt)).scalar_one_or_none()
+    if not fnd:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Finding '{finding_id}' not found.",
+        )
+
+    from services.graph_generator import generate_or_get_evidence_graph
+    graph_id = await generate_or_get_evidence_graph(fnd, db)
+    await db.commit()
+
+    return await get_graph_topology(graph_id=graph_id, project_id=project_id, db=db)
+
+
 @router.get("/{graph_id}/topology", response_model=EvidenceGraphResponse)
+@router.get("/{graph_id}", response_model=EvidenceGraphResponse)
 async def get_graph_topology(
     graph_id: str,
     project_id: Optional[str] = None,
@@ -60,13 +88,39 @@ async def get_graph_topology(
     nodes_result = await db.execute(stmt_nodes)
     nodes = nodes_result.scalars().all()
 
+    # If graph not found directly, check if graph_id corresponds to a finding
+    if not nodes:
+        clean_finding_id = graph_id[3:] if graph_id.startswith("GR-") else graph_id
+        fnd_stmt = select(Finding).where(
+            (Finding.id == graph_id)
+            | (Finding.id == clean_finding_id)
+            | (Finding.id == f"FND-{clean_finding_id}")
+        )
+        if project_id:
+            fnd_stmt = fnd_stmt.where(Finding.project_id == project_id)
+        fnd_res = await db.execute(fnd_stmt)
+        finding = fnd_res.scalar_one_or_none()
+        if finding:
+            from services.graph_generator import generate_or_get_evidence_graph
+            resolved_graph_id = await generate_or_get_evidence_graph(finding, db)
+            await db.commit()
+            stmt_nodes = select(GraphNode).where(GraphNode.graph_id == resolved_graph_id)
+            if project_id:
+                stmt_nodes = stmt_nodes.where(GraphNode.project_id == project_id)
+            nodes_result = await db.execute(stmt_nodes)
+            nodes = nodes_result.scalars().all()
+            graph_id = resolved_graph_id
+
     # Fallback to default graph if not found and no specific project requested
     if not nodes and not project_id:
-        nodes_result = await db.execute(select(GraphNode))
-        nodes = nodes_result.scalars().all()
-        if not nodes:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Graph not found")
-        graph_id = nodes[0].graph_id
+        if graph_id in ["default", "GR-FND104"]:
+            nodes_result = await db.execute(select(GraphNode))
+            nodes = nodes_result.scalars().all()
+            if nodes:
+                graph_id = nodes[0].graph_id
+
+    if not nodes:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Graph '{graph_id}' not found.")
 
     # Edges query
     stmt_edges = select(GraphEdge).where(GraphEdge.graph_id == graph_id)

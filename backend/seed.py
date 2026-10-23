@@ -1,11 +1,170 @@
 import os
 import asyncio
+from sqlalchemy import select
 from database import engine, async_session, Base
 from models import (
     Project, Finding, CpmMilestone, EvidenceAsset,
     UnconfiguredSensor, GraphNode, GraphEdge, GraphInspectorData,
     Document, DocumentPassage, FindingEvidenceLink,
+    MaterialReconciliation, ContractorClaim,
 )
+
+
+def calculate_material_variance(theoretical_quantity: float | None, actual_issued_quantity: float | None) -> tuple[float, float]:
+    """Calculate variance quantity and percentage with zero-division and None guards."""
+    theo = 0.0 if theoretical_quantity is None else float(theoretical_quantity)
+    actual = 0.0 if actual_issued_quantity is None else float(actual_issued_quantity)
+    variance_qty = round(actual - theo, 2)
+    if theo == 0.0:
+        variance_pct = 0.0
+    else:
+        variance_pct = round(((actual - theo) / theo) * 100, 2)
+    return variance_qty, variance_pct
+
+
+async def seed_planning_demo_records(session, project_id: str = "PRJ-NH48-PKG3"):
+    """Seed representative materials reconciliation and contractor claims for demonstration."""
+    # Check if materials already exist for idempotency
+    existing_mat = await session.execute(
+        select(MaterialReconciliation).where(MaterialReconciliation.project_id == project_id)
+    )
+    if not existing_mat.scalars().first():
+        materials_data = [
+            {
+                "material_code": "TMT-FE550D",
+                "material_name": "Thermo-Mechanically Treated Rebar (Fe 550D)",
+                "spec_code": "IS:1786 / IRC:112",
+                "unit": "MT",
+                "theoretical_quantity": 3620.0,
+                "actual_issued_quantity": 3410.0,
+                "variance_percent": -5.8,
+                "contractual_band": "Within ±6.0% band",
+                "status": "COMPLIANT",
+                "source_reference": "BBS Log Nov-2024 / Mill Certs (Demo)",
+            },
+            {
+                "material_code": "OPC-GR53",
+                "material_name": "Ordinary Portland Cement (Grade 53 OPC)",
+                "spec_code": "IS:269 / IS:456",
+                "unit": "Bags",
+                "theoretical_quantity": 9100.0,
+                "actual_issued_quantity": 8920.0,
+                "variance_percent": -1.9,
+                "contractual_band": "Within ±3.0% band",
+                "status": "COMPLIANT",
+                "source_reference": "Batching Plant Delivery Slips (Demo)",
+            },
+            {
+                "material_code": "AGG-20MM",
+                "material_name": "Crushed Coarse Aggregates (20mm nominal)",
+                "spec_code": "IS:383 / MORTH 1700",
+                "unit": "MT",
+                "theoretical_quantity": 4050.0,
+                "actual_issued_quantity": 4120.0,
+                "variance_percent": 1.7,
+                "contractual_band": "Within ±4.0% band",
+                "status": "COMPLIANT",
+                "source_reference": "Quarry Weighbridge Receipts (Demo)",
+            },
+            {
+                "material_code": "LRPC-15.2MM",
+                "material_name": "High-Strength Prestressing Strands (15.2mm LRPC)",
+                "spec_code": "IS:14268 Class II",
+                "unit": "MT",
+                "theoretical_quantity": 420.0,
+                "actual_issued_quantity": 448.0,
+                "variance_percent": 6.7,
+                "contractual_band": "Exceeds ±5.0% band",
+                "status": "OVERCONSUMED",
+                "source_reference": "Prestressing Jacking Log / QC Slip (Demo)",
+            },
+            {
+                "material_code": "RMC-M50",
+                "material_name": "Ready-Mix Concrete Grade M-50 (Pier Caps)",
+                "spec_code": "IRC:112 Table 6.1",
+                "unit": "Cu.m",
+                "theoretical_quantity": 1850.0,
+                "actual_issued_quantity": 1842.0,
+                "variance_percent": -0.4,
+                "contractual_band": "Within ±2.0% band",
+                "status": "COMPLIANT",
+                "source_reference": "Pour Card Registry Pier 16-20 (Demo)",
+            },
+        ]
+        for item in materials_data:
+            calc_qty, calc_pct = calculate_material_variance(item["theoretical_quantity"], item["actual_issued_quantity"])
+            variance_pct = item.get("variance_percent", calc_pct)
+            session.add(
+                MaterialReconciliation(
+                    project_id=project_id,
+                    material_code=item["material_code"],
+                    material_name=item["material_name"],
+                    spec_code=item["spec_code"],
+                    unit=item["unit"],
+                    theoretical_quantity=item["theoretical_quantity"],
+                    actual_issued_quantity=item["actual_issued_quantity"],
+                    variance_quantity=calc_qty,
+                    variance_percent=variance_pct,
+                    contractual_band=item["contractual_band"],
+                    status=item["status"],
+                    provenance="SYNTHETIC_DEMO",
+                    source_reference=item["source_reference"],
+                )
+            )
+
+    # Check if claims already exist for idempotency
+    existing_claims = await session.execute(
+        select(ContractorClaim).where(ContractorClaim.project_id == project_id)
+    )
+    if not existing_claims.scalars().first():
+        claims_data = [
+            ContractorClaim(
+                id="CLM-2024-019",
+                project_id=project_id,
+                contractor_name="HCC-NCC JV",
+                clause_reference="FIDIC Clause 8.4 (Extension of Time) & 8.9 (Suspension)",
+                claimed_amount_inr=1240000.0,
+                claimed_amount_inr_lakhs=12.4,
+                assessed_exposure_inr=485000.0,
+                assessed_exposure_inr_lakhs=4.85,
+                status="UNDER_TECHNICAL_EVALUATION",
+                linked_finding_id="FND-104",
+                description="Launching Gantry LG-160 idling costs for 4 days due to Resident Engineer stop-work notice on Pier 18 cantilever crack inspection.",
+                provenance="SYNTHETIC_DEMO",
+                source_reference="Contractor Letter HCC/NH48/PKG3/CLM/019 (Demo)",
+            ),
+            ContractorClaim(
+                id="CLM-2024-014",
+                project_id=project_id,
+                contractor_name="HCC-NCC JV",
+                clause_reference="FIDIC Clause 13.3 (Variation Procedure)",
+                claimed_amount_inr=550000.0,
+                claimed_amount_inr_lakhs=5.5,
+                assessed_exposure_inr=550000.0,
+                assessed_exposure_inr_lakhs=5.5,
+                status="NEGOTIATION",
+                linked_finding_id="FND-104",
+                description="Specialist carbon-fiber reinforced polymer (CFRP) bidirectional wrap application and high-pressure epoxy injection for Pier 18.",
+                provenance="SYNTHETIC_DEMO",
+                source_reference="Variation Proposal VP-007 (Demo)",
+            ),
+            ContractorClaim(
+                id="CLM-2024-008",
+                project_id=project_id,
+                contractor_name="Afcons Precast Div",
+                clause_reference="FIDIC Clause 4.12 (Unforeseeable Physical Conditions)",
+                claimed_amount_inr=890000.0,
+                claimed_amount_inr_lakhs=8.9,
+                assessed_exposure_inr=120000.0,
+                assessed_exposure_inr_lakhs=1.2,
+                status="PROPOSED_REJECTION",
+                linked_finding_id=None,
+                description="Sub-soil hard strata anomaly during Ch. 16+100 pile boring; consultant deemed geo-investigation boreholes adequate.",
+                provenance="SYNTHETIC_DEMO",
+                source_reference="Claim Submittal AF/PKG3/GEO/008 (Demo)",
+            ),
+        ]
+        session.add_all(claims_data)
 
 
 async def seed():
@@ -380,6 +539,9 @@ async def seed():
             ),
         ]
         s.add_all(inspector_data)
+
+        # ── Planning & Valuation (Materials Reconciliation & Claims) ──
+        await seed_planning_demo_records(s, project.id)
 
         await s.commit()
 

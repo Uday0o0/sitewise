@@ -135,6 +135,7 @@ class ReviewerDispositionState(BaseModel):
 
 class InspectionTelemetryResponse(BaseModel):
     findingId: str
+    graphId: Optional[str] = None
     assetChainage: str
     structureElement: str
     captureSource: CaptureSource
@@ -541,6 +542,7 @@ class FindingUploadResponse(BaseModel):
     findingId: str
     imageId: str
     analysisId: str
+    graphId: Optional[str] = None
     originalFilename: str
     fileSizeBytes: int
     sha256: str
@@ -698,5 +700,58 @@ class AssistantStatusResponse(BaseModel):
     providerAvailable: bool
     isConfigured: bool
     supportedTypes: list[str]
+
+
+# ─── Planning & Valuation (Materials Reconciliation & Claims) ────────
+
+class MaterialReconciliationItem(BaseModel):
+    id: int
+    projectId: str
+    materialCode: str
+    materialName: str
+    specCode: str
+    unit: str
+    theoreticalQuantity: float
+    actualIssuedQuantity: float
+    varianceQuantity: float
+    variancePercent: float
+    contractualBand: str
+    status: Literal["COMPLIANT", "OVERCONSUMED", "SAVING"]
+    provenance: str = "SYNTHETIC_DEMO"
+    sourceReference: Optional[str] = None
+
+
+class MaterialReconciliationResponse(BaseModel):
+    projectId: str
+    totalItems: int
+    compliantCount: int
+    overconsumedCount: int
+    savingCount: int
+    items: list[MaterialReconciliationItem]
+
+
+class ContractorClaimItem(BaseModel):
+    id: str  # Claim reference e.g. CLM-2024-019
+    projectId: str
+    contractorName: str
+    clauseReference: str
+    claimedAmountInr: float
+    claimedAmountInrLakhs: float
+    assessedExposureInr: float
+    assessedExposureInrLakhs: float
+    status: Literal["UNDER_TECHNICAL_EVALUATION", "PROPOSED_REJECTION", "NEGOTIATION"]
+    linkedFindingId: Optional[str] = None
+    description: str
+    provenance: str = "SYNTHETIC_DEMO"
+    sourceReference: Optional[str] = None
+
+
+class ContractorClaimsResponse(BaseModel):
+    projectId: str
+    totalClaims: int
+    totalClaimedAmountInrLakhs: float
+    totalAssessedExposureInrLakhs: float
+    claims: list[ContractorClaimItem]
+
 
 

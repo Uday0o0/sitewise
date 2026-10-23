@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
 from database import get_db
-from models import Finding, UploadedImage, ImageAnalysis, Document, DocumentPassage, FindingEvidenceLink, Project
+from models import Finding, UploadedImage, ImageAnalysis, Document, DocumentPassage, FindingEvidenceLink, Project, GraphNode
 from schemas import (
     InspectionTelemetryResponse, CaptureSource, PhotogrammetricMetrology,
     NdtCorroborationItem, ReviewerDispositionState,
@@ -22,6 +22,7 @@ from schemas import (
     FindingEvidenceLinkCreate, FindingEvidenceLinkResponse, FindingEvidenceLinksListResponse,
 )
 from services.image_processor import process_image, ImageValidationError, MAX_UPLOAD_SIZE_BYTES
+from services.graph_generator import generate_or_get_evidence_graph, link_evidence_to_graph
 
 router = APIRouter(prefix="/api/v4/findings", tags=["findings"])
 
@@ -302,12 +303,16 @@ async def upload_finding_image(
     )
     db.add(finding_record)
 
+    # Automatically generate or associate Evidence Graph for newly created finding
+    graph_id = await generate_or_get_evidence_graph(finding_record, db)
+
     await db.commit()
 
     return FindingUploadResponse(
         findingId=finding_id,
         imageId=image_id,
         analysisId=analysis_id,
+        graphId=graph_id,
         originalFilename=os.path.basename(file.filename or "uploaded_image"),
         fileSizeBytes=info.file_size_bytes,
         sha256=info.sha256_hash,
@@ -590,8 +595,16 @@ async def get_finding_telemetry(finding_id: str, db: AsyncSession = Depends(get_
     if not f:
         raise HTTPException(status_code=404, detail="Finding not found")
 
+    gn_res = await db.execute(
+        select(GraphNode.graph_id).where(GraphNode.finding_id == f.id).limit(1)
+    )
+    assigned_graph_id = gn_res.scalar_one_or_none()
+    if not assigned_graph_id:
+        assigned_graph_id = "GR-FND104" if f.id == "FND-104" else f"GR-{f.id.replace('FND-', '')}"
+
     return InspectionTelemetryResponse(
         findingId=f.id,
+        graphId=assigned_graph_id,
         assetChainage=f.chainage_formatted or "",
         structureElement=f.structure_element or f.location_desc or "",
         captureSource=CaptureSource(
@@ -764,6 +777,10 @@ async def create_finding_evidence_link(
         created_at=now_iso,
     )
     db.add(link)
+
+    # Attach evidence node to finding's evidence graph if present
+    await link_evidence_to_graph(finding_id, link, db)
+
     await db.commit()
     await db.refresh(link)
 

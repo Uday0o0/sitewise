@@ -313,7 +313,11 @@ export function InspectionWorkbenchPage() {
             <div className="flex items-center gap-2">
               <button
                 id="trace-risk-cascade-btn"
-                onClick={() => navigate(`/evidence-graph?findingId=${activeFindingId}&nodeId=N-AI-001`)}
+                onClick={() => {
+                  const targetGraphId = telemetryData.graphId || (activeFindingId === 'FND-104' ? 'GR-FND104' : `GR-${activeFindingId.replace(/[^A-Za-z0-9_-]/g, '')}`);
+                  const targetNodeId = activeFindingId === 'FND-104' ? 'N-AI-001' : `N-FND-${activeFindingId.replace(/[^A-Za-z0-9_-]/g, '')}`;
+                  navigate(`/evidence-graph?graphId=${encodeURIComponent(targetGraphId)}&findingId=${encodeURIComponent(activeFindingId)}&nodeId=${encodeURIComponent(targetNodeId)}`);
+                }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors"
                 style={{
                   background: 'var(--color-surface-container-high)',

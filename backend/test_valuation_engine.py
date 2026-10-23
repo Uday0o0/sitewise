@@ -154,3 +154,26 @@ async def test_07_partial_inputs_fallback():
         assert data["rate_per_sqft_inr"] > 0
         assert data["market_value_range"]["estimated_value_inr"] > 0
         assert data["provenance"] in ["AI_INFERRED", "CALCULATED_RISK"]
+
+
+@pytest.mark.asyncio
+async def test_08_valuation_estimate_post_endpoint():
+    """Verify HTTP POST /api/v4/valuation/estimate integration matches frontend contract."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post("/api/v4/valuation/estimate", json={
+            "property_location": "Gurugram (Golf Course Extension)",
+            "area_sqft": 1850,
+            "building_age_years": 3,
+            "property_type": "APARTMENT_HIGH_RISE",
+            "amenities": ["Gated Security", "Power Backup"],
+            "is_metro_adjacent": True,
+            "project_id": "PRJ-NH48-PKG3",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "market_value_range" in data
+        assert data["market_value_range"]["estimated_value_inr_crores"] > 0
+        assert data["rental_analysis"]["estimated_monthly_rent_inr"] > 0
+        assert data["appreciation_outlook"]["projected_cagr_percent"] > 0
+

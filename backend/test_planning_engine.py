@@ -146,3 +146,26 @@ async def test_06_quick_plan_get_endpoint():
         assert len(data["cost_breakdown"]) == 5
         assert len(data["phase_schedule"]) == 5
         assert "disclaimer" in data
+
+
+@pytest.mark.asyncio
+async def test_07_generate_plan_post_endpoint():
+    """Verify HTTP POST /api/v4/planning/generate-plan integration matches frontend contract."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post("/api/v4/planning/generate-plan", json={
+            "plot_length_ft": 50,
+            "plot_width_ft": 30,
+            "floors": 2,
+            "ground_coverage_percent": 70,
+            "construction_type": "RESIDENTIAL_STANDARD",
+            "location_city": "Gurugram",
+            "project_id": "PRJ-NH48-PKG3",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["built_up_area_sqft"] == 2100.0
+        assert data["total_estimated_cost_inr_lakhs"] > 0
+        assert len(data["materials_takeoff"]) >= 4
+        assert len(data["phase_schedule"]) == 5
+

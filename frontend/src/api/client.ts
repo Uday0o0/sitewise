@@ -50,6 +50,8 @@ import type {
   ScenarioSaveRequest,
   ScenarioItemResponse,
   ScenarioListResponse,
+  MaterialReconciliationResponse,
+  ContractorClaimsResponse,
 } from '../types/api';
 
 
@@ -205,6 +207,13 @@ export const api = {
 
   getDocumentFileUrl: (projectId: string, documentId: string) =>
     `${BASE_URL}/projects/${projectId}/documents/${documentId}/file`,
+
+  // Planning & Valuation (Materials Reconciliation & Claims)
+  getMaterialReconciliation: (projectId: string) =>
+    request<MaterialReconciliationResponse>(`/projects/${projectId}/materials/reconciliation`),
+
+  getContractorClaims: (projectId: string) =>
+    request<ContractorClaimsResponse>(`/projects/${projectId}/claims`),
 };
 
 

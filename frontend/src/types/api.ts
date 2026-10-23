@@ -145,6 +145,7 @@ export interface ReviewerDispositionState {
 
 export interface InspectionTelemetryResponse {
   findingId: string;
+  graphId?: string | null;
   assetChainage: string;
   structureElement: string;
   captureSource: CaptureSource;
@@ -497,6 +498,7 @@ export interface FindingUploadResponse {
   findingId: string;
   imageId: string;
   analysisId: string;
+  graphId?: string | null;
   originalFilename: string;
   fileSizeBytes: number;
   sha256: string;
@@ -644,5 +646,58 @@ export interface AssistantStatusResponse {
   isConfigured: boolean;
   supportedTypes: string[];
 }
+
+// ─── Planning & Valuation (Materials Reconciliation & Claims) ────────
+
+export interface MaterialReconciliationItem {
+  id: number;
+  projectId: string;
+  materialCode: string;
+  materialName: string;
+  specCode: string;
+  unit: string;
+  theoreticalQuantity: number;
+  actualIssuedQuantity: number;
+  varianceQuantity: number;
+  variancePercent: number;
+  contractualBand: string;
+  status: 'COMPLIANT' | 'OVERCONSUMED' | 'SAVING';
+  provenance: ProvenanceType;
+  sourceReference?: string | null;
+}
+
+export interface MaterialReconciliationResponse {
+  projectId: string;
+  totalItems: number;
+  compliantCount: number;
+  overconsumedCount: number;
+  savingCount: number;
+  items: MaterialReconciliationItem[];
+}
+
+export interface ContractorClaimItem {
+  id: string;
+  projectId: string;
+  contractorName: string;
+  clauseReference: string;
+  claimedAmountInr: number;
+  claimedAmountInrLakhs: number;
+  assessedExposureInr: number;
+  assessedExposureInrLakhs: number;
+  status: 'UNDER_TECHNICAL_EVALUATION' | 'PROPOSED_REJECTION' | 'NEGOTIATION';
+  linkedFindingId?: string | null;
+  description: string;
+  provenance: ProvenanceType;
+  sourceReference?: string | null;
+}
+
+export interface ContractorClaimsResponse {
+  projectId: string;
+  totalClaims: number;
+  totalClaimedAmountInrLakhs: number;
+  totalAssessedExposureInrLakhs: number;
+  claims: ContractorClaimItem[];
+}
+
 
 

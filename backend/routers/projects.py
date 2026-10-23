@@ -5,11 +5,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import get_db
-from models import Project, Finding, CpmMilestone, EvidenceAsset, UnconfiguredSensor
+from models import (
+    Project, Finding, CpmMilestone, EvidenceAsset, UnconfiguredSensor,
+    MaterialReconciliation, ContractorClaim,
+)
 from schemas import (
     OverviewResponse, ProjectMetadata, KpiSummaries, FindingsBreakdown,
     PriorityDecision, CpmMilestoneItem, EvidenceIngestItem,
     UnconfiguredSensorItem, ProjectListItem,
+    MaterialReconciliationItem, MaterialReconciliationResponse,
+    ContractorClaimItem, ContractorClaimsResponse,
 )
 
 router = APIRouter(prefix="/api/v4/projects", tags=["projects"])
@@ -148,3 +153,99 @@ async def get_overview(project_id: str, db: AsyncSession = Depends(get_db)):
             for s in sensors
         ],
     )
+
+
+@router.get("/{project_id}/materials/reconciliation", response_model=MaterialReconciliationResponse)
+async def get_materials_reconciliation(project_id: str, db: AsyncSession = Depends(get_db)):
+    """Retrieve certified material reconciliation and variance records for a project."""
+    result = await db.execute(
+        select(Project).where((Project.id == project_id) | (Project.package_id == project_id))
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+
+    items_res = await db.execute(
+        select(MaterialReconciliation)
+        .where(MaterialReconciliation.project_id == project.id)
+        .order_by(MaterialReconciliation.id.asc())
+    )
+    items = items_res.scalars().all()
+
+    compliant = sum(1 for item in items if item.status == "COMPLIANT")
+    overconsumed = sum(1 for item in items if item.status == "OVERCONSUMED")
+    saving = sum(1 for item in items if item.status == "SAVING")
+
+    return MaterialReconciliationResponse(
+        projectId=project.id,
+        totalItems=len(items),
+        compliantCount=compliant,
+        overconsumedCount=overconsumed,
+        savingCount=saving,
+        items=[
+            MaterialReconciliationItem(
+                id=item.id,
+                projectId=item.project_id,
+                materialCode=item.material_code,
+                materialName=item.material_name,
+                specCode=item.spec_code,
+                unit=item.unit,
+                theoreticalQuantity=item.theoretical_quantity,
+                actualIssuedQuantity=item.actual_issued_quantity,
+                varianceQuantity=item.variance_quantity,
+                variancePercent=item.variance_percent,
+                contractualBand=item.contractual_band,
+                status=item.status,
+                provenance=item.provenance,
+                sourceReference=item.source_reference,
+            )
+            for item in items
+        ],
+    )
+
+
+@router.get("/{project_id}/claims", response_model=ContractorClaimsResponse)
+async def get_contractor_claims(project_id: str, db: AsyncSession = Depends(get_db)):
+    """Retrieve contractor commercial and extension-of-time claims for a project."""
+    result = await db.execute(
+        select(Project).where((Project.id == project_id) | (Project.package_id == project_id))
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+
+    claims_res = await db.execute(
+        select(ContractorClaim)
+        .where(ContractorClaim.project_id == project.id)
+        .order_by(ContractorClaim.id.asc())
+    )
+    claims = claims_res.scalars().all()
+
+    total_claimed_lakhs = round(sum(c.claimed_amount_inr_lakhs for c in claims), 2)
+    total_assessed_lakhs = round(sum(c.assessed_exposure_inr_lakhs for c in claims), 2)
+
+    return ContractorClaimsResponse(
+        projectId=project.id,
+        totalClaims=len(claims),
+        totalClaimedAmountInrLakhs=total_claimed_lakhs,
+        totalAssessedExposureInrLakhs=total_assessed_lakhs,
+        claims=[
+            ContractorClaimItem(
+                id=c.id,
+                projectId=c.project_id,
+                contractorName=c.contractor_name,
+                clauseReference=c.clause_reference,
+                claimedAmountInr=c.claimed_amount_inr,
+                claimedAmountInrLakhs=c.claimed_amount_inr_lakhs,
+                assessedExposureInr=c.assessed_exposure_inr,
+                assessedExposureInrLakhs=c.assessed_exposure_inr_lakhs,
+                status=c.status,
+                linkedFindingId=c.linked_finding_id,
+                description=c.description,
+                provenance=c.provenance,
+                sourceReference=c.source_reference,
+            )
+            for c in claims
+        ],
+    )
+

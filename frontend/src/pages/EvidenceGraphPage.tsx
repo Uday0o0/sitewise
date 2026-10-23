@@ -38,9 +38,15 @@ type FilterMode = 'ALL' | 'CRITICAL_PATH_ONLY' | 'SOURCE_EVIDENCE' | 'MITIGATION
 export function EvidenceGraphPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const urlGraphId = searchParams.get('graphId') || 'GR-FND104';
-  const urlNodeId = searchParams.get('nodeId');
   const urlFindingId = searchParams.get('findingId');
+  const urlGraphId =
+    searchParams.get('graphId') ||
+    (urlFindingId
+      ? urlFindingId === 'FND-104'
+        ? 'GR-FND104'
+        : `GR-${urlFindingId.replace(/[^A-Za-z0-9_-]/g, '')}`
+      : 'GR-FND104');
+  const urlNodeId = searchParams.get('nodeId');
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>('ALL');
