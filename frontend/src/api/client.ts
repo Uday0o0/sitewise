@@ -2,7 +2,13 @@
  * SITEWISE V4.2 — Typed API client
  */
 
-const BASE_URL = '/api/v4';
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+const BASE_URL = `${API_BASE}/api/v4`;
+
+export function getApiUrl(path: string): string {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE}${cleanPath}`;
+}
 
 export class ApiError extends Error {
   status: number;

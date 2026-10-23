@@ -1,0 +1,29 @@
+# ==============================================================================
+# SITEWISE V4.2 — Render Cloud Deployment Blueprint
+# Evaluator Note: Deploys the FastAPI backend service to Render Web Services.
+# ==============================================================================
+
+services:
+  - type: web
+    name: sitewise-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v4/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SITEWISE_AI_PROVIDER
+        value: auto
+      - key: CORS_ORIGINS
+        value: https://sitewise-frontend.vercel.app
+      - key: CORS_ORIGIN_REGEX
+        value: ^https:\/\/.*\.vercel\.app$
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./sitewise.db
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

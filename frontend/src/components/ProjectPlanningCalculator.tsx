@@ -16,6 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { DataProvenanceBadge } from './DataProvenanceBadge';
+import { getApiUrl } from '../api/client';
 
 interface MaterialItem {
   material_code: string;
@@ -92,7 +93,7 @@ export function ProjectPlanningCalculator({ projectId = 'PRJ-NH48-PKG3' }: { pro
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v4/planning/generate-plan', {
+      const res = await fetch(getApiUrl('/api/v4/planning/generate-plan'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

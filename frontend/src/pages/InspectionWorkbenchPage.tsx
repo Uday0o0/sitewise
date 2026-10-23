@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
-import { api } from '../api/client';
+import { api, getApiUrl } from '../api/client';
 import { DataProvenanceBadge } from '../components/DataProvenanceBadge';
 import {
   Loader2, AlertTriangle, Camera, Crosshair, Eye,
@@ -682,7 +682,7 @@ export function InspectionWorkbenchPage() {
                 {/* Candidate Mask Overlay (Toggled) — Shows subtle candidate pixels */}
                 {hasMask && showMaskOverlay && (
                   <img
-                    src={`/api/v4/evidence/images/${analysisData?.imageId}/mask`}
+                    src={getApiUrl(`/api/v4/evidence/images/${analysisData?.imageId}/mask`)}
                     alt="Crack Candidate Overlay Mask"
                     className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-200"
                     style={{

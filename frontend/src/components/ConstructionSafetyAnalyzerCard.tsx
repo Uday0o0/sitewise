@@ -3,6 +3,7 @@ import {
   ShieldAlert, HardHat, AlertTriangle, CheckCircle2, Upload,
   Camera, RefreshCw, Eye, Info, FileText, Activity, ShieldCheck, Flame
 } from 'lucide-react';
+import { getApiUrl } from '../api/client';
 
 interface SafetyResult {
   project_id: string;
@@ -89,7 +90,7 @@ export function ConstructionSafetyAnalyzerCard({ projectId = "PRJ-NH48-PKG3" }: 
       if (notes.trim()) formData.append('notes', notes.trim());
       formData.append('image', selectedFile);
 
-      const res = await fetch('/api/v4/safety-inspection/analyze', {
+      const res = await fetch(getApiUrl('/api/v4/safety-inspection/analyze'), {
         method: 'POST',
         body: formData,
       });

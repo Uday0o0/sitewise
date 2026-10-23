@@ -3,6 +3,7 @@ import {
   Sparkles, Layers, Building, Eye, AlertTriangle, RefreshCw,
   CheckCircle2, Info, Maximize2, ShieldAlert
 } from 'lucide-react';
+import { getApiUrl } from '../api/client';
 
 interface OptionsData {
   building_types: Record<string, string>;
@@ -54,7 +55,7 @@ export function ArchitecturalVisualizerCard({ projectId }: { projectId: string }
   const [expandedImage, setExpandedImage] = useState(false);
 
   useEffect(() => {
-    fetch('/api/v4/architectural-preview/options')
+    fetch(getApiUrl('/api/v4/architectural-preview/options'))
       .then(res => res.json())
       .then(data => {
         setOptions(data);
@@ -87,7 +88,7 @@ export function ArchitecturalVisualizerCard({ projectId }: { projectId: string }
         custom_notes: customNotes.trim() || undefined
       };
 
-      const res = await fetch(`/api/v4/projects/${projectId}/architectural-preview`, {
+      const res = await fetch(getApiUrl(`/api/v4/projects/${projectId}/architectural-preview`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

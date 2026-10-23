@@ -21,6 +21,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { DataProvenanceBadge } from './DataProvenanceBadge';
+import { getApiUrl } from '../api/client';
 
 interface DailyTaskItem {
   sequence: number;
@@ -101,7 +102,7 @@ export function DailySiteBriefingCard({ projectId = 'PRJ-NH48-PKG3' }: { project
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v4/projects/${projectId}/assistant/daily-briefing`, {
+      const res = await fetch(getApiUrl(`/api/v4/projects/${projectId}/assistant/daily-briefing`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

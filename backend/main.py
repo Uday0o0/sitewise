@@ -1,13 +1,17 @@
-"""SITEWISE V4.2 — FastAPI Application Entry Point."""
-
+import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Load environment from backend/.env or root .env
+# Ensure backend directory is in sys.path for direct or module imports
 _base_dir = Path(__file__).resolve().parent
+if str(_base_dir) not in sys.path:
+    sys.path.insert(0, str(_base_dir))
+
+# Load environment from backend/.env or root .env
 load_dotenv(_base_dir / ".env")
 load_dotenv(_base_dir.parent / ".env")
 
@@ -30,9 +34,38 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Resolve allowed CORS origins from defaults and environment variables
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+cors_env = os.getenv("CORS_ORIGINS", "")
+if cors_env:
+    for origin in cors_env.split(","):
+        clean_origin = origin.strip()
+        if clean_origin and clean_origin not in allowed_origins:
+            allowed_origins.append(clean_origin)
+
+frontend_url = os.getenv("FRONTEND_URL", "").strip()
+if frontend_url and frontend_url not in allowed_origins:
+    allowed_origins.append(frontend_url)
+
+vercel_url = os.getenv("VERCEL_URL", "").strip()
+if vercel_url:
+    v_origin = f"https://{vercel_url}" if not vercel_url.startswith("http") else vercel_url
+    if v_origin not in allowed_origins:
+        allowed_origins.append(v_origin)
+
+# Allow Vercel preview deployments by regex or custom pattern
+cors_regex = os.getenv("CORS_ORIGIN_REGEX", r"^https:\/\/.*\.vercel\.app$")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=cors_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

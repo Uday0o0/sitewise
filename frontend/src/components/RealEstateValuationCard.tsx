@@ -17,6 +17,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { DataProvenanceBadge } from './DataProvenanceBadge';
+import { getApiUrl } from '../api/client';
 
 interface ValueRangeINR {
   minimum_value_inr: number;
@@ -118,7 +119,7 @@ export function RealEstateValuationCard({ projectId = 'PRJ-NH48-PKG3' }: { proje
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v4/valuation/estimate', {
+      const res = await fetch(getApiUrl('/api/v4/valuation/estimate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

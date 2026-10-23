@@ -15,6 +15,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { DataProvenanceBadge } from './DataProvenanceBadge';
+import { getApiUrl } from '../api/client';
 
 export interface WeatherMetrics {
   temperature_c?: number | null;
@@ -83,7 +84,7 @@ export function WeatherAdvisoryCard({ projectId = 'PRJ-NH48-PKG3' }: { projectId
     try {
       let res: Response;
       if (customScenario) {
-        res = await fetch(`/api/v4/projects/${projectId}/weather/advisory`, {
+        res = await fetch(getApiUrl(`/api/v4/projects/${projectId}/weather/advisory`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -93,7 +94,7 @@ export function WeatherAdvisoryCard({ projectId = 'PRJ-NH48-PKG3' }: { projectId
           }),
         });
       } else {
-        res = await fetch(`/api/v4/projects/${projectId}/weather/advisory?activity=${activity}&scenario=true`);
+        res = await fetch(getApiUrl(`/api/v4/projects/${projectId}/weather/advisory?activity=${activity}&scenario=true`));
       }
 
       if (!res.ok) {
