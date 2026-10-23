@@ -218,6 +218,22 @@ export function WeatherAdvisoryCard({ projectId = 'PRJ-NH48-PKG3' }: { projectId
         </div>
       </div>
 
+      {/* Error Alert Banner */}
+      {error && (
+        <div className="my-3 p-3 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+          <AlertTriangle size={15} className="shrink-0 text-rose-400" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Initial Loading Indicator */}
+      {loading && !advisory && (
+        <div className="my-4 p-6 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+          <RefreshCw size={14} className="animate-spin text-brand-yellow" />
+          <span>Evaluating meteorological safety thresholds...</span>
+        </div>
+      )}
+
       {/* What-If Simulator Panel */}
       {simulationOpen && (
         <div className="my-3 p-3.5 rounded-md text-xs space-y-3" style={{ background: 'var(--color-surface-container-med)', border: '1px solid var(--color-surface-border)' }}>

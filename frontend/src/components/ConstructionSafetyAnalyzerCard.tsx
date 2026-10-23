@@ -89,7 +89,7 @@ export function ConstructionSafetyAnalyzerCard({ projectId = "PRJ-NH48-PKG3" }: 
       if (notes.trim()) formData.append('notes', notes.trim());
       formData.append('image', selectedFile);
 
-      const res = await fetch('http://localhost:8000/api/v4/safety-inspection/analyze', {
+      const res = await fetch('/api/v4/safety-inspection/analyze', {
         method: 'POST',
         body: formData,
       });
