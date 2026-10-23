@@ -146,7 +146,7 @@ export function ProjectPlanningCalculator({ projectId = 'PRJ-NH48-PKG3' }: { pro
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-                  Activity 3.1: Construction Project Planning Logic
+                  Construction Project Planning & Material Takeoff
                 </h2>
                 <DataProvenanceBadge type="CALCULATED" label="CPWD DSR FORMULAS" />
               </div>

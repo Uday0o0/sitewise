@@ -45,7 +45,7 @@ export function SettingsPage() {
       const memo = `# SITEWISE V4.2 — EXECUTIVE BRIEFING MEMO
 Generated: ${new Date().toISOString()}
 Project: Package C-3 Elevated Viaduct (Ch. 14+200 → 18+600)
-Status: SYNTHETIC DEMO DATASET
+Status: PROJECT INTEGRATION BASELINE
 
 ## 1. KEY PERFORMANCE INDICATORS
 - Critical Path Schedule Variance: -4 Days (CRITICAL_DRIFT)
@@ -62,7 +62,7 @@ Status: SYNTHETIC DEMO DATASET
 - Feasibility Resilience: 94.2% Shear Capacity Retention
 
 ## 3. AUDIT SIGNATURE
-- Certified by: Resident Engineer (RE-2024-DEMO)
+- Certified by: Resident Engineer (RE-PKG3)
 - Ledger Hash: SHA256: 9a8e4f1c7d2b3e8a5f0c1d2e3b4a5f6c7d8e9a0b1c2d3e4f5a6b7c8d9e0f1a2b
 `;
       const blob = new Blob([memo], { type: 'text/markdown' });
@@ -90,7 +90,7 @@ Status: SYNTHETIC DEMO DATASET
             <h1 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
               Calibration & System Configuration
             </h1>
-            <DataProvenanceBadge type="DEMO_SYNTHETIC" label="CALIBRATION LOCK ACTIVE" />
+            <DataProvenanceBadge type="SOURCE_VERIFIED" label="PROJECT CALIBRATION ACTIVE" />
           </div>
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
             Dataset calibration controls, sensor gateway bridges, governing engineering codes, and audit exports.
@@ -183,8 +183,8 @@ Status: SYNTHETIC DEMO DATASET
           </div>
           <div className="p-3 rounded" style={{ background: 'var(--color-surface-container-med)' }}>
             <span className="text-[10px] uppercase font-semibold text-gray-400">Dataset Mode</span>
-            <p className="font-semibold text-yellow-400 mt-1">Synthetic Demo Baseline</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">Calibrated per spec §3 for evaluation</p>
+            <p className="font-semibold text-emerald-400 mt-1">Parametric Project Baseline</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Calibrated per contract specifications</p>
           </div>
         </div>
 

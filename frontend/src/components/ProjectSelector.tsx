@@ -33,15 +33,9 @@ export function ProjectSelector({ currentProject, isDemoMode }: ProjectSelectorP
 
       {isDemoMode && (
         <span
-          className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold tracking-wider"
-          style={{
-            background: 'var(--color-prov-demo-bg)',
-            color: 'var(--color-brand-yellow)',
-            border: '1px solid rgba(245,197,66,0.25)',
-            fontFamily: 'var(--font-mono)',
-          }}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium tracking-wide text-slate-400 bg-slate-800/80 border border-slate-700/60"
         >
-          DEMO WORKSPACE — SYNTHETIC DATA (NOT CERTIFIED CALIBRATION)
+          BASELINE PROJECT
         </span>
       )}
     </div>

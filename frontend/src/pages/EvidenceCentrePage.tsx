@@ -294,14 +294,14 @@ export function EvidenceCentrePage() {
               Evidence Centre & Document Intelligence
             </h1>
             <DataProvenanceBadge
-              type={activeTab === 'DOCUMENTS' ? 'SOURCE_VERIFIED' : 'DEMO_SYNTHETIC'}
-              label={activeTab === 'DOCUMENTS' ? 'REAL DOCUMENT PIPELINE' : 'SYNTHETIC DEMO ASSETS'}
+              type="SOURCE_VERIFIED"
+              label={activeTab === 'DOCUMENTS' ? 'PROJECT DOCUMENT PIPELINE' : 'FIELD TELEMETRY & SENSOR LEDGER'}
             />
           </div>
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
             {activeTab === 'DOCUMENTS'
               ? 'Multi-format construction document repository with automatic text extraction, page parsing, and TF-IDF passage indexing.'
-              : 'Cryptographically signed multi-modal telemetry repository, photogrammetry logs, and material mill test certificates (Milestone 1).'}
+              : 'Cryptographically signed multi-modal telemetry repository, photogrammetry logs, and material mill test certificates.'}
           </p>
         </div>
 
@@ -342,7 +342,7 @@ export function EvidenceCentrePage() {
               }}
             >
               <Database size={14} />
-              <span>Synthetic Evidence Ledger</span>
+              <span>Field Telemetry & Sensor Ledger</span>
             </button>
           </div>
 

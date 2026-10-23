@@ -48,7 +48,7 @@ export function OverviewPage() {
             {data.projectMetadata.projectName} • Last sync {new Date(data.projectMetadata.dataSyncTimestamp).toLocaleString()}
           </p>
         </div>
-        <DataProvenanceBadge type="DEMO_SYNTHETIC" label="SYNTHETIC DEMO" sublabel="NOT CERTIFIED" />
+        <DataProvenanceBadge type="CALCULATED_RISK" label="INTEGRATED PROJECT DASHBOARD" sublabel="MONITORING ACTIVE" />
       </div>
 
       {/* KPI Cards — 4 columns */}

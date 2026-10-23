@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GlobalHeader } from './GlobalHeader';
 import { NavigationRail } from './NavigationRail';
-import { SyntheticDemoBanner } from './SyntheticDemoBanner';
+
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,32 +15,33 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden" style={{ background: 'var(--color-surface-canvas)' }}>
-      {/* Synthetic Demo Banner */}
-      <SyntheticDemoBanner />
-
       {/* Global Header — 56px */}
       <GlobalHeader />
 
-      {/* Sub-header context strip — 44px */}
+      {/* Sub-header context strip — 38px */}
       <div
-        className="flex items-center px-4 gap-3 shrink-0 border-b"
+        className="flex items-center px-4 gap-3 shrink-0 border-b text-xs"
         style={{
-          height: '44px',
+          height: '38px',
           background: 'var(--color-surface-base)',
           borderColor: 'var(--color-surface-border-subtle)',
         }}
       >
-        <span className="text-xs font-mono" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-          Ch. 14+200 → Ch. 18+600
+        <span className="font-mono text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>
+          Chainage: Ch. 14+200 → Ch. 18+600
         </span>
-        <span className="w-px h-4" style={{ background: 'var(--color-surface-border-default)' }} />
-        <span className="text-xs flex items-center gap-1.5" style={{ color: 'var(--color-brand-yellow)' }}>
-          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-brand-yellow)' }} />
-          SYNTHETIC DEMO DATASET
+        <span className="w-px h-3.5 bg-slate-800" />
+        <span className="text-slate-400">
+          Package: <strong className="text-slate-200 font-medium">PKG-3 Elevated Viaduct</strong>
         </span>
-        <span className="w-px h-4" style={{ background: 'var(--color-surface-border-default)' }} />
-        <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-          RTK-GPS: Not Connected
+        <span className="w-px h-3.5 bg-slate-800" />
+        <span className="text-slate-400 hidden sm:inline">
+          Governing Code: <span className="font-mono text-cyan-300">IRC:112-2020</span>
+        </span>
+        <span className="w-px h-3.5 bg-slate-800 hidden sm:inline" />
+        <span className="flex items-center gap-1.5 text-emerald-400 font-mono text-[11px]">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          Telemetry Pipeline: Active
         </span>
       </div>
 

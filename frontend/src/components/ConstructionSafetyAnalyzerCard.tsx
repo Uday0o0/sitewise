@@ -136,7 +136,7 @@ export function ConstructionSafetyAnalyzerCard({ projectId = "PRJ-NH48-PKG3" }: 
             <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
               Construction Safety & PPE Inspection
               <span className="text-xs px-2 py-0.5 rounded font-mono font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                Activity 2.1 / Vision AI
+                VISION-LANGUAGE SAFETY MODEL
               </span>
             </h2>
           </div>

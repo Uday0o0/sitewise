@@ -55,7 +55,7 @@ export function PlanningCostPage() {
             <h1 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
               Planning & Cost Reconciliation
             </h1>
-            <DataProvenanceBadge type="CALCULATED_RISK" label="SYNTHETIC P6 SYNC" />
+            <DataProvenanceBadge type="CALCULATED_RISK" label="PARAMETRIC CPM MODEL" />
           </div>
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
             Primavera P6 Critical Path CPM synchronization, BBS material reconciliation, and contractor claims exposure ledger.

@@ -263,12 +263,12 @@ export function SimulatorPage() {
             <span
               className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold"
               style={{
-                background: 'rgba(245,197,66,0.15)',
-                color: 'var(--color-brand-yellow)',
-                border: '1px solid rgba(245,197,66,0.3)',
+                background: 'rgba(56,189,248,0.15)',
+                color: '#38BDF8',
+                border: '1px solid rgba(56,189,248,0.3)',
               }}
             >
-              M4 DETERMINISTIC ENGINE
+              PARAMETRIC WHAT-IF ENGINE
             </span>
           </div>
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -277,7 +277,7 @@ export function SimulatorPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <DataProvenanceBadge type="DEMO_SYNTHETIC" label="DETERMINISTIC MODEL" sublabel="UNITS & FORMULAS AUDITABLE" />
+          <DataProvenanceBadge type="CALCULATED" label="DETERMINISTIC MODEL" sublabel="UNITS & FORMULAS AUDITABLE" />
           <button
             onClick={() => setShowSaveModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors"
@@ -288,7 +288,7 @@ export function SimulatorPage() {
             }}
           >
             <Bookmark size={13} style={{ color: 'var(--color-brand-yellow)' }} />
-            Save Current Scenario
+            <span>Save Current Scenario</span>
           </button>
         </div>
       </div>
@@ -305,14 +305,14 @@ export function SimulatorPage() {
         <div className="space-y-0.5 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-bold uppercase tracking-wider text-[11px]" style={{ color: '#F59E0B', fontFamily: 'var(--font-display)' }}>
-              Contextual Disclaimer — Stated Assumptions & Synthetic Demo Data
+              Contextual Engineering Disclaimer — Stated Project Assumptions
             </span>
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">
               ADVISORY ONLY
             </span>
           </div>
           <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
-            Outputs are parametric estimates based on stated project assumptions. Synthetic demonstration values (such as gantry crane idling demurrage rates, specialized applicator rates, and curing intervals) are illustrative and results do not constitute certified structural engineering, contractual claims advice, or binding construction forecasts.
+            Outputs are parametric estimates based on stated project inputs and equipment rates. Calculated values (such as gantry crane idling demurrage rates, specialized applicator rates, and curing intervals) are parametric and results do not constitute certified structural engineering, contractual claims advice, or binding construction forecasts.
           </p>
         </div>
       </div>

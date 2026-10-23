@@ -125,7 +125,7 @@ export function ArchitecturalVisualizerCard({ projectId }: { projectId: string }
             <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
               AI Conceptual Architectural Visualisation
               <span className="text-xs px-2 py-0.5 rounded font-mono font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                Activity 3.3 / Concept Preview
+                AI CONCEPT PREVIEW
               </span>
             </h2>
           </div>

@@ -52,7 +52,7 @@ interface GroundedChatMessage {
   retrievedPassages?: SearchPassageResult[];
 }
 
-const DEMO_PRESET_QUERIES = [
+const SUGGESTED_INQUIRIES = [
   {
     label: 'IRC:112 Pier 18 Compliance',
     prompt: 'Evaluate Pier 18 cantilever crack aperture (0.35mm) against IRC:112 Clause 12.3 crack width criteria.',
@@ -83,9 +83,6 @@ export function SiteAssistantPage() {
 
   // Primary Tab: Chatbot vs Daily Morning Briefing
   const [primaryTab, setPrimaryTab] = useState<'CHAT' | 'BRIEFING'>('CHAT');
-
-  // Assistant Mode: Grounded RAG vs Offline Demo
-  const [assistantMode, setAssistantMode] = useState<'GROUNDED' | 'DEMO_SYNTHETIC'>('GROUNDED');
 
   // Project & Document Scope
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
@@ -175,66 +172,38 @@ Upload construction documents in the **Evidence Centre** or select a document sc
     if (!customPrompt) setInputValue('');
     setIsQuerying(true);
 
-    if (assistantMode === 'GROUNDED') {
-      try {
-        const docId = selectedDocScope === 'ALL' ? undefined : selectedDocScope;
-        const answerResp = await api.queryAssistant(selectedProjectId, question, docId);
+    try {
+      const docId = selectedDocScope === 'ALL' ? undefined : selectedDocScope;
+      const answerResp = await api.queryAssistant(selectedProjectId, question, docId);
 
-        const botMsg: GroundedChatMessage = {
-          id: `bot-${Date.now()}`,
-          sender: 'assistant',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: answerResp.answer,
-          citations: answerResp.citations,
-          isGrounded: answerResp.isGrounded,
-          insufficientEvidence: answerResp.insufficientEvidence,
-          provider: answerResp.provider,
-          model: answerResp.model,
-          providerAvailable: answerResp.providerAvailable,
-          error: answerResp.error,
-          retrievedPassages: answerResp.retrievalInfo?.passages || [],
-        };
+      const botMsg: GroundedChatMessage = {
+        id: `bot-${Date.now()}`,
+        sender: 'assistant',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        content: answerResp.answer,
+        citations: answerResp.citations,
+        isGrounded: answerResp.isGrounded,
+        insufficientEvidence: answerResp.insufficientEvidence,
+        provider: answerResp.provider,
+        model: answerResp.model,
+        providerAvailable: answerResp.providerAvailable,
+        error: answerResp.error,
+        retrievedPassages: answerResp.retrievalInfo?.passages || [],
+      };
 
-        setMessages(prev => [...prev, botMsg]);
-      } catch (err: any) {
-        const errorMsg: GroundedChatMessage = {
-          id: `bot-err-${Date.now()}`,
-          sender: 'assistant',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: `An error occurred while evaluating your question: ${err.message || 'Unknown network error'}.`,
-          error: err.message,
-          providerAvailable: false,
-        };
-        setMessages(prev => [...prev, errorMsg]);
-      } finally {
-        setIsQuerying(false);
-      }
-    } else {
-      // Offline Simulated Demo Mode (Simulated Response)
-      setTimeout(() => {
-        let simulatedAnswer = '';
-        if (question.toLowerCase().includes('irc:112') || question.toLowerCase().includes('crack')) {
-          simulatedAnswer = `### Structural Assessment (Simulated Demo Corpus)\n\nGoverning specification **IRC:112-2020 Clause 12.3** specifies that for reinforced concrete members in severe environmental exposure, the design crack width limit shall not exceed **0.20 mm** under quasi-permanent load combinations (verified in DOC-57F675F71F).\n\nMeasured aperture of 0.35 mm exceeds the allowable threshold by **+75%**, requiring structural disposition before launching operations can proceed.\n\n*Notice: Non-certified engineering calculation.*`;
-        } else if (question.toLowerCase().includes('damages') || question.toLowerCase().includes('liquidated')) {
-          simulatedAnswer = `### Contractual Exposure (Simulated Demo Corpus)\n\n> **[UNVERIFIED DEMO ESTIMATE]**: No Concession Agreement or Contract Schedule document is ingested in the project corpus.\n\nUnder hypothetical demo assumptions, liquidated damages accrue at **₹2.40 Lakhs/day** for critical-path milestones beyond the allowable cure period. Gantry idle equipment standing charges are estimated at ₹1.10 Lakhs/shift.`;
-        } else {
-          simulatedAnswer = `### Simulated Resident Engineer Assistant Response\n\nQuery: *"${question}"*\n\nBased on the offline demonstration database, Pier 18 requires crack injection and epoxy resin verification per IRC:SP:40 [UNVERIFIED CODE] before precast girder segment #B24 can be erected.\n\n*Notice: Not certified structural engineering advice.*`;
-        }
-
-        const botMsg: GroundedChatMessage = {
-          id: `bot-${Date.now()}`,
-          sender: 'assistant',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: simulatedAnswer,
-          isGrounded: false,
-          provider: 'synthetic-demo',
-          model: 'offline-corpus-v1',
-          providerAvailable: true,
-        };
-
-        setMessages(prev => [...prev, botMsg]);
-        setIsQuerying(false);
-      }, 700);
+      setMessages(prev => [...prev, botMsg]);
+    } catch (err: any) {
+      const errorMsg: GroundedChatMessage = {
+        id: `bot-err-${Date.now()}`,
+        sender: 'assistant',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        content: `An error occurred while evaluating your question: ${err.message || 'Unknown network error'}.`,
+        error: err.message,
+        providerAvailable: false,
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setIsQuerying(false);
     }
   };
 
@@ -248,16 +217,14 @@ Upload construction documents in the **Evidence Centre** or select a document sc
               Site Intelligence Assistant
             </h1>
             <DataProvenanceBadge
-              type={primaryTab === 'BRIEFING' ? 'SOURCE_VERIFIED' : (assistantMode === 'GROUNDED' ? 'SOURCE_VERIFIED' : 'DEMO_SYNTHETIC')}
-              label={primaryTab === 'BRIEFING' ? 'DAILY BRIEFING ENGINE' : (assistantMode === 'GROUNDED' ? 'GROUNDED RAG ASSISTANT' : 'OFFLINE DEMO CORPUS')}
+              type="SOURCE_VERIFIED"
+              label={primaryTab === 'BRIEFING' ? 'DAILY BRIEFING ENGINE' : 'GROUNDED DOCUMENT RAG'}
             />
           </div>
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
             {primaryTab === 'BRIEFING'
               ? 'Automated morning site supervisor briefing synthesizing active findings, CPM schedule slips, and meteorological rules.'
-              : (assistantMode === 'GROUNDED'
-                ? 'Answers questions strictly grounded in uploaded project documents with verifiable source citations and page references.'
-                : 'Simulated responses from hardcoded IRC specifications and Primavera P6 schedule templates (Milestone 1 demo).')}
+              : 'Answers engineering questions strictly grounded in uploaded project documents with verifiable source citations and page references.'}
           </p>
         </div>
 
@@ -298,39 +265,6 @@ Upload construction documents in the **Evidence Centre** or select a document sc
         <DailySiteBriefingCard projectId={selectedProjectId} />
       ) : (
         <>
-          {/* Sub-mode Selector for Chatbot */}
-          <div className="flex items-center justify-end">
-            <div
-              className="flex p-1 rounded-lg border shrink-0"
-              style={{
-                background: 'var(--color-surface-container-low)',
-                borderColor: 'var(--color-surface-border-subtle)',
-              }}
-            >
-              <button
-                onClick={() => setAssistantMode('GROUNDED')}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
-                style={{
-                  background: assistantMode === 'GROUNDED' ? 'var(--color-brand-yellow)' : 'transparent',
-                  color: assistantMode === 'GROUNDED' ? '#000' : 'var(--color-text-secondary)',
-                }}
-              >
-                <BookOpen size={13} />
-                <span>Grounded Documents (RAG)</span>
-              </button>
-              <button
-                onClick={() => setAssistantMode('DEMO_SYNTHETIC')}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
-                style={{
-                  background: assistantMode === 'DEMO_SYNTHETIC' ? 'var(--color-brand-yellow)' : 'transparent',
-                  color: assistantMode === 'DEMO_SYNTHETIC' ? '#000' : 'var(--color-text-secondary)',
-                }}
-              >
-                <Sparkles size={13} />
-                <span>Synthetic Offline Demo</span>
-              </button>
-            </div>
-          </div>
 
       {/* Scope Controls Bar (Project, Document Scope, Provider Status) */}
       <div
@@ -366,51 +300,47 @@ Upload construction documents in the **Evidence Centre** or select a document sc
           <span className="w-px h-4 hidden sm:block" style={{ background: 'var(--color-surface-border-subtle)' }} />
 
           {/* Document Scope Filter */}
-          {assistantMode === 'GROUNDED' && (
-            <div className="flex items-center gap-2">
-              <FileText size={14} style={{ color: 'var(--color-text-secondary)' }} />
-              <span className="text-xs font-semibold text-gray-300">Scope:</span>
-              <select
-                value={selectedDocScope}
-                onChange={e => setSelectedDocScope(e.target.value)}
-                className="px-2.5 py-1 rounded text-xs font-mono outline-none max-w-xs truncate"
-                style={{
-                  background: 'var(--color-surface-container-high)',
-                  color: 'var(--color-text-primary)',
-                  border: '1px solid var(--color-surface-border-default)',
-                }}
-              >
-                <option value="ALL">All Project Documents ({documents.length} Available)</option>
-                {documents.map(d => (
-                  <option key={d.documentId} value={d.documentId}>
-                    {d.title} ({d.fileType})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <FileText size={14} style={{ color: 'var(--color-text-secondary)' }} />
+            <span className="text-xs font-semibold text-gray-300">Scope:</span>
+            <select
+              value={selectedDocScope}
+              onChange={e => setSelectedDocScope(e.target.value)}
+              className="px-2.5 py-1 rounded text-xs font-mono outline-none max-w-xs truncate"
+              style={{
+                background: 'var(--color-surface-container-high)',
+                color: 'var(--color-text-primary)',
+                border: '1px solid var(--color-surface-border-default)',
+              }}
+            >
+              <option value="ALL">All Project Documents ({documents.length} Available)</option>
+              {documents.map(d => (
+                <option key={d.documentId} value={d.documentId}>
+                  {d.title} ({d.fileType})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* AI Provider Status Badge */}
-        {assistantMode === 'GROUNDED' && (
-          <div className="flex items-center gap-2">
-            {providerStatus?.providerAvailable ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                {providerStatus.provider.toUpperCase()} ({providerStatus.model}) • Live RAG Active
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                <AlertTriangle size={12} />
-                No Live AI Key ({providerStatus?.provider === 'groq' ? 'GROQ_API_KEY' : 'GEMINI_API_KEY'}) • Lexical Retrieval Active
-              </span>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {providerStatus?.providerAvailable ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              {providerStatus.provider.toUpperCase()} ({providerStatus.model}) • Live RAG Active
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              <AlertTriangle size={12} />
+              No Live AI Key ({providerStatus?.provider === 'groq' ? 'GROQ_API_KEY' : 'GEMINI_API_KEY'}) • Lexical Retrieval Active
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Warning Alert if AI key not configured in Grounded Mode */}
-      {assistantMode === 'GROUNDED' && providerStatus && !providerStatus.providerAvailable && (
+      {/* Warning Alert if AI key not configured */}
+      {providerStatus && !providerStatus.providerAvailable && (
         <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <Info size={15} className="shrink-0 text-amber-400" />
@@ -601,8 +531,8 @@ Upload construction documents in the **Evidence Centre** or select a document sc
 
       {/* Suggested Prompt Chips */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
-        <span className="text-[11px] font-semibold text-gray-400">Suggested:</span>
-        {DEMO_PRESET_QUERIES.map((preset, idx) => (
+        <span className="text-[11px] font-semibold text-slate-400">Sample Technical Inquiries:</span>
+        {SUGGESTED_INQUIRIES.map((preset, idx) => (
           <button
             key={idx}
             onClick={() => handleSend(preset.prompt)}
@@ -629,11 +559,7 @@ Upload construction documents in the **Evidence Centre** or select a document sc
       >
         <input
           type="text"
-          placeholder={
-            assistantMode === 'GROUNDED'
-              ? 'Ask an engineering question about uploaded documents...'
-              : 'Ask simulated engineering assistant...'
-          }
+          placeholder="Ask an engineering question about uploaded documents..."
           value={inputValue}
           onChange={e => setInputValue(e.target.value)}
           disabled={isQuerying}

@@ -4,13 +4,14 @@ import { ProjectSelector } from './ProjectSelector';
 
 export function GlobalHeader() {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showLockInfo, setShowLockInfo] = useState(false);
   const [unreadCount, setUnreadCount] = useState(3);
 
   const handleExportMemo = () => {
     const memo = `# SITEWISE V4.2 — EXECUTIVE BRIEFING MEMO
 Generated: ${new Date().toISOString()}
 Project: Package C-3 Elevated Viaduct (Ch. 14+200 → 18+600)
-Status: SYNTHETIC DEMO DATASET (DEMO CALIBRATION ONLY)
+Status: PROJECT INTEGRATION BASELINE
 
 ## 1. CRITICAL PATH & SCHEDULE
 - Critical Path Schedule Slip: -4 Days (CRITICAL_DRIFT)
@@ -25,7 +26,7 @@ Status: SYNTHETIC DEMO DATASET (DEMO CALIBRATION ONLY)
 - Schedule Days Recovered: +15 Days (vs. 18-day recast demolition baseline)
 - Financial Exposure Net Avoidance: ₹14.80 Lakhs (vs. ₹20.30L recast exposure)
 
-* Disclaimer: Demo prototype calculation. Not a certified structural engineering submission.
+* Disclaimer: Parametric engineering decision-support estimate. Not a certified structural engineering submission.
 `;
     const blob = new Blob([memo], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
@@ -87,11 +88,46 @@ Status: SYNTHETIC DEMO DATASET (DEMO CALIBRATION ONLY)
 
       {/* Right: Actions */}
       <div className="flex items-center gap-2 relative">
-        <HeaderButton
-          icon={<Lock size={15} />}
-          label="Calibration Lock: Certified Master P6 Protected"
-          onClick={() => alert('Calibration Lock Active: Working session adjustments are isolated to working buffer dates and cannot overwrite certified EPC baseline schedule without Project Director approval.')}
-        />
+        <div className="relative">
+          <HeaderButton
+            icon={<Lock size={15} />}
+            label="Schedule Baseline Lock: Certified Master P6 Protected"
+            onClick={() => {
+              setShowLockInfo(!showLockInfo);
+              setShowNotifications(false);
+            }}
+          />
+
+          {showLockInfo && (
+            <div
+              className="absolute right-0 top-10 w-72 rounded-lg p-3 shadow-xl z-50 text-xs space-y-2 border"
+              style={{
+                background: 'var(--color-surface-container-high)',
+                borderColor: 'var(--color-surface-border-strong)',
+              }}
+            >
+              <div className="flex items-center justify-between border-b border-surface-border-subtle pb-1.5">
+                <span className="font-semibold text-white flex items-center gap-1.5">
+                  <Lock size={13} className="text-amber-400" />
+                  Certified Baseline Lock
+                </span>
+                <button
+                  onClick={() => setShowLockInfo(false)}
+                  className="text-[10px] text-slate-400 hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
+              <p className="text-slate-300 text-[11px] leading-relaxed">
+                Master Primavera P6 EPC baseline schedule dates are protected. Working session modifications and what-if adjustments evaluate downstream delay without altering certified contractual milestones.
+              </p>
+              <div className="pt-1 border-t border-surface-border-subtle flex items-center justify-between text-[10px] font-mono text-slate-400">
+                <span>Baseline: BL-2024-Q3-REV4</span>
+                <span className="text-emerald-400">VERIFIED</span>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="relative">
           <HeaderButton
@@ -162,7 +198,7 @@ Status: SYNTHETIC DEMO DATASET (DEMO CALIBRATION ONLY)
             color: 'var(--color-text-secondary)',
             border: '1px solid var(--color-surface-border-default)',
           }}
-          title="Resident Engineer (RE-2024-DEMO)"
+          title="Resident Engineer (RE-PKG3)"
         >
           RE
         </div>

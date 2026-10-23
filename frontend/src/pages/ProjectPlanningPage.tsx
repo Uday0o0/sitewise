@@ -19,7 +19,7 @@ export function ProjectPlanningPage() {
           }`}
         >
           <Compass size={16} />
-          Civil Material & Schedule Planning (Activity 3.1)
+          Civil Material & Schedule Planning
         </button>
 
         <button
@@ -31,7 +31,7 @@ export function ProjectPlanningPage() {
           }`}
         >
           <Sparkles size={16} />
-          AI Architectural Visualisation (Activity 3.3)
+          Architectural Concept Visualisation
         </button>
       </div>
 

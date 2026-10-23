@@ -166,7 +166,7 @@ export function RealEstateValuationCard({ projectId = 'PRJ-NH48-PKG3' }: { proje
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-                  Activity 3.2: Real Estate Valuation Engine
+                  Real Estate Valuation & Investment Yield Engine
                 </h2>
                 <DataProvenanceBadge type="AI_INFERRED" label="INDIAN MARKET COMPS" />
               </div>
