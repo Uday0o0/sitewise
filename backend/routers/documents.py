@@ -552,16 +552,49 @@ async def ask_assistant(
             detail="Question query text cannot be empty."
         )
 
+    # If scoped to a specific document, verify document status
+    if req.documentId:
+        doc_res = await db.execute(
+            select(Document).where(Document.id == req.documentId, Document.project_id == project_id)
+        )
+        target_doc = doc_res.scalar_one_or_none()
+        if target_doc:
+            if target_doc.processing_status == "REQUIRES_OCR":
+                return AssistantAnswer(
+                    answer=f"Document '{target_doc.title}' ({target_doc.original_filename}) is a scanned document with no extractable text. Optical Character Recognition (OCR) is required before this document can be queried.",
+                    citations=[],
+                    isGrounded=False,
+                    insufficientEvidence=False,
+                    provider=ai_provider.get_active_provider_name(),
+                    model=ai_provider.get_active_model_name(),
+                    providerAvailable=ai_provider.is_provider_available(),
+                    error=f"Document requires OCR: {target_doc.processing_error or 'No text layer found.'}",
+                    retrievalInfo=SearchResponse(query=req.question, projectId=project_id, totalResults=0, passages=[]),
+                )
+            elif target_doc.processing_status == "FAILED":
+                return AssistantAnswer(
+                    answer=f"Document '{target_doc.title}' ({target_doc.original_filename}) failed text extraction: {target_doc.processing_error or 'Processing error'}. Please reprocess or re-upload the document.",
+                    citations=[],
+                    isGrounded=False,
+                    insufficientEvidence=False,
+                    provider=ai_provider.get_active_provider_name(),
+                    model=ai_provider.get_active_model_name(),
+                    providerAvailable=ai_provider.is_provider_available(),
+                    error=f"Document processing failed: {target_doc.processing_error}",
+                    retrievalInfo=SearchResponse(query=req.question, projectId=project_id, totalResults=0, passages=[]),
+                )
+
     # Ensure retrieval index is synced for this project
     idx = retrieval.get_index()
     await idx.sync_from_db(db, project_id=project_id)
 
-    # Retrieve relevant passages scoped strictly to project
-    raw_results = idx.search(query=req.question, project_id=project_id, top_k=6)
-
-    # Optional document filter
-    if req.documentId:
-        raw_results = [r for r in raw_results if r.document_id == req.documentId]
+    # Retrieve relevant passages scoped strictly to project and optional document filter
+    raw_results = idx.search(
+        query=req.question,
+        project_id=project_id,
+        document_id=req.documentId,
+        top_k=6,
+    )
 
     search_passages = [
         SearchPassageResult(

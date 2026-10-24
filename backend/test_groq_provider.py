@@ -341,3 +341,149 @@ async def test_assistant_query_endpoint_with_groq_flow():
                 assert data["citations"][0]["documentId"] == doc_id
                 assert data["citations"][0]["downloadUrl"] == f"/api/v4/projects/PRJ-NH48-PKG3/documents/{doc_id}/file"
                 assert data["retrievalInfo"]["totalResults"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_groq_ncr_draft_with_missing_fields_not_flagged_as_insufficient():
+    """Ensure an NCR draft that highlights missing information is recognized as grounded, not insufficient evidence."""
+    passages = [
+        {
+            "document_id": "DOC-PIER18-QA",
+            "document_title": "Pier 18 QA Report",
+            "chunk_index": 0,
+            "content": "Pier 18 Cantilever QA Log: Ultrasonic pulse velocity measured 3850 m/s. Verified compliant with IRC:112 crack limit 0.20mm.",
+            "score": 0.88,
+        }
+    ]
+
+    mock_chat_completion = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = (
+        "**Non-Conformance Report (NCR-084)**\n"
+        "Project: Pier 18 Cantilever\n"
+        "Measured UPV is 3850 m/s compliant with IRC:112 [DOC‑1].\n"
+        "Missing Information: Contractor HCC-NCC JV registration details and actual crack aperture are not provided in the uploaded documents."
+    )
+    mock_chat_completion.choices = [mock_choice]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_chat_completion)
+
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_test", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
+        with patch("groq.AsyncGroq", return_value=mock_client):
+            resp = await ai_provider._ask_groq("Draft NCR-084 for Pier 18 and identify missing info", passages)
+            assert resp.is_grounded is True
+            assert resp.insufficient_evidence is False
+            assert len(resp.citations) == 1
+            assert resp.citations[0].document_id == "DOC-PIER18-QA"
+            assert "[DOC-1]" in resp.answer
+
+
+@pytest.mark.asyncio
+async def test_groq_unicode_dashes_spaces_and_brackets_in_citations():
+    """Verify that unicode non-breaking hyphens, en-dashes, and unicode spaces in DOC citations are normalized."""
+    passages = [
+        {"document_id": "D1", "document_title": "Doc 1", "chunk_index": 0, "content": "Evidence 1", "score": 0.9},
+        {"document_id": "D2", "document_title": "Doc 2", "chunk_index": 1, "content": "Evidence 2", "score": 0.8},
+    ]
+
+    mock_chat_completion = MagicMock()
+    mock_choice = MagicMock()
+    # \u2011 is non-breaking hyphen, \u2013 is en-dash, \u202f is narrow no-break space
+    mock_choice.message.content = "According to [DOC\u20111] and \u3010DOC\u20132\u3011, values are verified."
+    mock_chat_completion.choices = [mock_choice]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_chat_completion)
+
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_test", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
+        with patch("groq.AsyncGroq", return_value=mock_client):
+            resp = await ai_provider._ask_groq("Test question", passages)
+            assert resp.is_grounded is True
+            assert len(resp.citations) == 2
+            assert resp.citations[0].document_id == "D1"
+            assert resp.citations[1].document_id == "D2"
+            assert "[DOC-1]" in resp.answer
+            assert "[DOC-2]" in resp.answer
+
+
+@pytest.mark.asyncio
+async def test_groq_empty_passages_returns_immediate_insufficient_evidence():
+    """Verify that passing empty passages returns an immediate insufficient evidence response without API call."""
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_test", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
+        with patch("groq.AsyncGroq") as mock_groq:
+            resp = await ai_provider._ask_groq("What is the bridge length?", [])
+            assert resp.insufficient_evidence is True
+            assert resp.is_grounded is False
+            assert "sufficient evidence" in resp.answer.lower()
+            mock_groq.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_assistant_query_document_scoping_isolation():
+    """Verify that passing documentId scopes retrieval specifically to that document."""
+    from database import async_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        u1 = await ac.post(
+            "/api/v4/projects/PRJ-NH48-PKG3/documents/upload",
+            files={"file": ("doc_a.txt", b"Pier 22 foundation concrete cast with C-35 mix.", "text/plain")},
+            data={"title": "Doc A"}
+        )
+        doc_a_id = u1.json()["documentId"]
+
+        u2 = await ac.post(
+            "/api/v4/projects/PRJ-NH48-PKG3/documents/upload",
+            files={"file": ("doc_b.txt", b"Abutment 1 backfill compacted with 98% proctor density.", "text/plain")},
+            data={"title": "Doc B"}
+        )
+        doc_b_id = u2.json()["documentId"]
+
+        # Search scoped specifically to Doc A
+        idx = retrieval.get_index()
+        async with async_session() as session:
+            await idx.sync_from_db(session, project_id="PRJ-NH48-PKG3")
+        results = idx.search(query="concrete density", project_id="PRJ-NH48-PKG3", document_id=doc_a_id)
+        assert len(results) > 0
+        for r in results:
+            assert r.document_id == doc_a_id
+
+
+@pytest.mark.asyncio
+async def test_assistant_query_ocr_or_failed_document_diagnostics():
+    """Verify that querying a document requiring OCR returns an informative diagnostic rather than generic refusal."""
+    from database import async_session
+    from models import Document
+
+    async with async_session() as session:
+        scanned_doc = Document(
+            id="DOC-SCANNED-01",
+            project_id="PRJ-NH48-PKG3",
+            title="Scanned Bridge Blueprint",
+            original_filename="blueprint_scanned.pdf",
+            file_type=".pdf",
+            mime_type="application/pdf",
+            file_size_bytes=500000,
+            sha256_hash="dummyhash123",
+            storage_key="dummy_key",
+            processing_status="REQUIRES_OCR",
+            processing_error="Scanned document detected. No digital text found; OCR is required.",
+            word_count=0,
+            page_count=5,
+            requires_ocr=True,
+            uploaded_at="2026-10-24T12:00:00Z",
+        )
+        session.add(scanned_doc)
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/v4/projects/PRJ-NH48-PKG3/assistant/query",
+            json={"question": "What is the span length?", "documentId": "DOC-SCANNED-01"}
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert "OCR" in data["answer"]
+        assert data["insufficientEvidence"] is False
+        assert data["error"] is not None
+

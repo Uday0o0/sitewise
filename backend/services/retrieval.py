@@ -189,27 +189,32 @@ class DocumentIndex:
         self,
         query: str,
         project_id: Optional[str] = None,
+        document_id: Optional[str] = None,
         top_k: int = 5,
         min_score: float = 0.01,
     ) -> list[RetrievalResult]:
         """Search the index for chunks most relevant to the query.
-        Guarantees strict project boundary isolation if project_id is provided.
+        Guarantees strict project boundary isolation if project_id is provided,
+        and optional single-document scoping if document_id is provided.
 
         Args:
             query: Natural language query
             project_id: Optional project filter
+            document_id: Optional document filter
             top_k: Maximum number of results
             min_score: Minimum relevance score threshold
 
         Returns:
             List of RetrievalResult sorted by descending relevance
         """
-        # Filter chunks by project if requested
+        # Filter chunks by project and optional document if requested
         candidate_chunks = (
             [c for c in self._chunks if c["project_id"] == project_id]
             if project_id
             else self._chunks
         )
+        if document_id:
+            candidate_chunks = [c for c in candidate_chunks if c["document_id"] == document_id]
 
         if not candidate_chunks:
             return []
