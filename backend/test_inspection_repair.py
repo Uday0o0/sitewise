@@ -293,3 +293,45 @@ def test_07_real_resolution_934x1142_integrity():
         assert 0 <= bbox[1] < 1142
         assert bbox[0] + bbox[2] <= 934
         assert bbox[1] + bbox[3] <= 1142
+
+
+@pytest.mark.asyncio
+async def test_08_evidence_image_and_mask_retrieval_and_error_handling():
+    """Verify original image and mask retrieval endpoint returns persisted bytes, correct MIME, and handles 404/traversal."""
+    img_bytes = generate_test_image(width=180, height=180, line_thickness=6)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/v4/findings/upload",
+            files={"file": ("pier_surface.png", img_bytes, "image/png")},
+            data={"structureElement": "Pier Cap 18"},
+        )
+        assert res.status_code == 200
+        data = res.json()
+        image_id = data["imageId"]
+        img_url = data["imageUrl"]
+        mask_url = data["maskUrl"]
+
+        assert img_url == f"/api/v4/evidence/images/{image_id}"
+        assert mask_url == f"/api/v4/evidence/images/{image_id}/mask"
+
+        # 1. Fetch original image
+        res_img = await ac.get(img_url)
+        assert res_img.status_code == 200
+        assert res_img.headers["content-type"] == "image/png"
+        assert len(res_img.content) == len(img_bytes)
+
+        # 2. Fetch mask overlay
+        res_mask = await ac.get(mask_url)
+        assert res_mask.status_code == 200
+        assert res_mask.headers["content-type"] == "image/png"
+        assert len(res_mask.content) > 0
+
+        # 3. Missing image yields 404 Not Found
+        res_missing = await ac.get("/api/v4/evidence/images/IMG-NONEXISTENT")
+        assert res_missing.status_code == 404
+        assert "not found" in res_missing.json()["detail"].lower()
+
+        # 4. Invalid identifier / traversal attempt yields 400 Bad Request
+        res_traversal = await ac.get("/api/v4/evidence/images/..%2F..%2Fpasswd")
+        assert res_traversal.status_code in (400, 404)
+

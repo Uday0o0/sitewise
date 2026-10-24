@@ -7,7 +7,8 @@ import {
   Loader2, AlertTriangle, Camera, Crosshair, Eye,
   CheckCircle2, Clock, AlertCircle, Send, Upload, Layers,
   FileImage, Hash, Info, ShieldAlert, Sliders, RefreshCw,
-  FlaskConical, ExternalLink, Bot, FileText, GitFork, Plus
+  FlaskConical, ExternalLink, Bot, FileText, GitFork, Plus,
+  ZoomIn, ZoomOut
 } from 'lucide-react';
 import type {
   FindingListItem,
@@ -27,6 +28,9 @@ export function InspectionWorkbenchPage() {
   const [filterMode, setFilterMode] = useState<FilterMode>('NORMAL');
   const [showMaskOverlay, setShowMaskOverlay] = useState<boolean>(true);
   const [showReticle, setShowReticle] = useState<boolean>(true);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [imageLoading, setImageLoading] = useState<boolean>(true);
+  const [imageError, setImageError] = useState<boolean>(false);
   const [disposition, setDisposition] = useState<DispositionType>('CONFIRM_NCR');
   const [engineerNotes, setEngineerNotes] = useState('');
   const [notesError, setNotesError] = useState('');
@@ -152,6 +156,9 @@ export function InspectionWorkbenchPage() {
     setAnalysisData(null); // CRITICAL: Reset immediately so no stale count from previously selected image is shown
     setAnalysisError(null);
     setSelectedCandidateId(null);
+    setZoomLevel(1);
+    setImageLoading(true);
+    setImageError(false);
 
     api.getFindingAnalysis(activeFindingId)
       .then(res => {
@@ -313,7 +320,7 @@ export function InspectionWorkbenchPage() {
 
   const metro = telemetryData.photogrammetricMetrology;
   const isUploadedFinding = activeFindingId.startsWith('FND-UPL') || (analysisData && analysisData.algorithm.name.includes('BLACKHAT'));
-  const hasRealImage = Boolean(isUploadedFinding && metro.imageUrl && metro.imageUrl.startsWith('/api/v4/evidence/'));
+  const hasRealImage = Boolean(isUploadedFinding && metro.imageUrl);
   const hasMask = Boolean(analysisData?.hasCandidate && analysisData?.maskUrl);
 
   return (
@@ -742,87 +749,162 @@ export function InspectionWorkbenchPage() {
             {hasRealImage ? (
               /* REAL UPLOADED IMAGE RENDERING */
               <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-black">
-                {/* Intrinsic aspect-ratio container ensuring overlay markers align with zero letterbox drift */}
-                <div
-                  className="relative flex items-center justify-center"
-                  style={{
-                    aspectRatio: `${analysisData?.imageMetadata?.width || 1} / ${analysisData?.imageMetadata?.height || 1}`,
-                    maxWidth: '100%',
-                    maxHeight: '100%',
-                    width: 'auto',
-                    height: 'auto',
-                  }}
-                >
-                  {/* Real Uploaded Image */}
-                  <img
-                    src={metro.imageUrl}
-                    alt="Real Structural Inspection Target"
-                    className="w-full h-full object-contain block transition-all duration-200"
-                    style={{
-                      filter:
-                        filterMode === 'EDGE_CONTRAST'
-                          ? 'contrast(200%) brightness(110%) saturate(150%)'
-                          : filterMode === 'INVERT'
-                          ? 'invert(1) hue-rotate(180deg)'
-                          : undefined,
-                    }}
-                  />
+                {/* Loading State */}
+                {imageLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 z-20 pointer-events-none">
+                    <Loader2 className="animate-spin text-amber-400 mb-2" size={24} />
+                    <span className="text-xs font-mono text-neutral-300">Loading source inspection image...</span>
+                  </div>
+                )}
 
-                  {/* Candidate Mask Overlay (Toggled) — Shows subtle Safety Yellow candidate pixels */}
-                  {hasMask && showMaskOverlay && (
+                {/* Error State */}
+                {imageError ? (
+                  <div
+                    id="real-image-error-fallback"
+                    data-testid="real-image-error-fallback"
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-950 p-6 text-center z-20 select-text"
+                  >
+                    <AlertTriangle size={36} className="text-amber-400 mb-2.5" />
+                    <p className="text-sm font-bold text-neutral-100">Unable to Load Source Inspection Image</p>
+                    <p className="text-xs text-neutral-400 max-w-md mt-1 leading-relaxed">
+                      The server did not return image data for this inspection record or the resource was unreachable.
+                    </p>
+                    <p className="text-[10px] text-neutral-500 font-mono mt-2 px-2.5 py-1 rounded bg-neutral-900 border border-neutral-800 break-all max-w-md">
+                      {getApiUrl(metro.imageUrl)}
+                    </p>
+                    <button
+                      id="retry-image-ingest-btn"
+                      onClick={() => {
+                        setImageError(false);
+                        setImageLoading(true);
+                      }}
+                      className="mt-3 px-3 py-1.5 rounded text-xs font-mono bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-neutral-700 cursor-pointer transition-colors"
+                    >
+                      Retry Image Request
+                    </button>
+                  </div>
+                ) : (
+                  /* Intrinsic aspect-ratio container ensuring overlay markers align with zero letterbox drift */
+                  <div
+                    id="inspection-viewport-content"
+                    data-testid="inspection-viewport-content"
+                    className="relative flex items-center justify-center transition-transform duration-200"
+                    style={{
+                      aspectRatio: `${analysisData?.imageMetadata?.width || 1} / ${analysisData?.imageMetadata?.height || 1}`,
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      width: 'auto',
+                      height: 'auto',
+                      transform: `scale(${zoomLevel})`,
+                      transformOrigin: 'center center',
+                    }}
+                  >
+                    {/* Real Uploaded Image */}
                     <img
-                      src={getApiUrl(`/api/v4/evidence/images/${analysisData?.imageId}/mask`)}
-                      alt="Crack Candidate Overlay Mask"
-                      className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-200"
+                      id="real-inspection-image"
+                      data-testid="real-inspection-image"
+                      src={getApiUrl(metro.imageUrl)}
+                      alt="Real Structural Inspection Target"
+                      onLoad={() => {
+                        setImageLoading(false);
+                        setImageError(false);
+                      }}
+                      onError={() => {
+                        setImageLoading(false);
+                        setImageError(true);
+                      }}
+                      className="w-full h-full object-contain block transition-all duration-200"
                       style={{
-                        mixBlendMode: filterMode === 'INVERT' ? 'difference' : 'normal',
+                        filter:
+                          filterMode === 'EDGE_CONTRAST'
+                            ? 'contrast(200%) brightness(110%) saturate(150%)'
+                            : filterMode === 'INVERT'
+                            ? 'invert(1) hue-rotate(180deg)'
+                            : undefined,
                       }}
                     />
-                  )}
 
-                  {/* Selected Candidate Focus Marker — EXACTLY on top of candidate pixels */}
-                  {selectedCandidateId && analysisData?.crackSummary?.candidates && (() => {
-                    const selectedCand = analysisData.crackSummary.candidates.find(c => c.id === selectedCandidateId);
-                    if (!selectedCand) return null;
-                    const imgW = analysisData.imageMetadata?.width || 1;
-                    const imgH = analysisData.imageMetadata?.height || 1;
-                    const bbox = selectedCand.boundingBox;
-                    if (!bbox || bbox.length < 4) return null;
-                    const candNum = selectedCand.id.replace(/[^0-9]/g, '') || selectedCand.id;
-
-                    return (
-                      <div
-                        id="selected-candidate-marker"
-                        data-testid="selected-candidate-marker"
-                        className="absolute rounded pointer-events-none transition-all duration-200"
+                    {/* Candidate Mask Overlay (Toggled) — Shows subtle Safety Yellow candidate pixels */}
+                    {hasMask && showMaskOverlay && (
+                      <img
+                        id="candidate-mask-overlay"
+                        data-testid="candidate-mask-overlay"
+                        src={getApiUrl(analysisData?.maskUrl || `/api/v4/evidence/images/${analysisData?.imageId}/mask`)}
+                        alt="Crack Candidate Overlay Mask"
+                        className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-200"
                         style={{
-                          left: `${Math.max(0, (bbox[0] / imgW) * 100)}%`,
-                          top: `${Math.max(0, (bbox[1] / imgH) * 100)}%`,
-                          width: `${Math.min(100, (bbox[2] / imgW) * 100)}%`,
-                          height: `${Math.min(100, (bbox[3] / imgH) * 100)}%`,
-                          border: '2px solid var(--color-brand-yellow)',
-                          boxShadow: '0 0 16px rgba(245, 197, 66, 0.7), inset 0 0 6px rgba(245, 197, 66, 0.2)',
-                          backgroundColor: 'rgba(245, 197, 66, 0.08)',
+                          mixBlendMode: filterMode === 'INVERT' ? 'difference' : 'normal',
                         }}
-                      >
+                      />
+                    )}
+
+                    {/* Candidate Focus Markers — Interactive & Exactly Aligned on Top of Candidate Pixels */}
+                    {analysisData?.crackSummary?.candidates && analysisData.crackSummary.candidates.map(cand => {
+                      const isSelected = cand.id === selectedCandidateId;
+                      const imgW = analysisData.imageMetadata?.width || 1;
+                      const imgH = analysisData.imageMetadata?.height || 1;
+                      const bbox = cand.boundingBox;
+                      if (!bbox || bbox.length < 4) return null;
+                      const candNum = cand.id.replace(/[^0-9]/g, '') || cand.id;
+
+                      return (
                         <div
-                          className="absolute -top-3.5 -left-1 flex items-center justify-center text-[10px] px-1.5 py-0.5 rounded shadow font-mono font-bold"
-                          style={{
-                            background: 'var(--color-brand-yellow)',
-                            color: '#000000',
-                            border: '1px solid #000000',
-                            lineHeight: 1,
+                          key={cand.id}
+                          id={isSelected ? 'selected-candidate-marker' : `marker-${cand.id.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                          data-testid={isSelected ? 'selected-candidate-marker' : `candidate-marker-${cand.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCandidateId(isSelected ? null : cand.id);
                           }}
+                          className="absolute rounded cursor-pointer transition-all duration-200"
+                          style={{
+                            left: `${Math.max(0, (bbox[0] / imgW) * 100)}%`,
+                            top: `${Math.max(0, (bbox[1] / imgH) * 100)}%`,
+                            width: `${Math.min(100, (bbox[2] / imgW) * 100)}%`,
+                            height: `${Math.min(100, (bbox[3] / imgH) * 100)}%`,
+                            border: isSelected ? '2px solid var(--color-brand-yellow)' : '1px dashed rgba(245, 197, 66, 0.6)',
+                            boxShadow: isSelected
+                              ? '0 0 16px rgba(245, 197, 66, 0.7), inset 0 0 6px rgba(245, 197, 66, 0.2)'
+                              : '0 0 4px rgba(245, 197, 66, 0.3)',
+                            backgroundColor: isSelected ? 'rgba(245, 197, 66, 0.12)' : 'rgba(245, 197, 66, 0.04)',
+                            pointerEvents: 'auto',
+                          }}
+                          title={`Candidate ${cand.id} (Click to toggle focus)`}
                         >
-                          #{candNum}
+                          <div
+                            className="absolute -top-3.5 -left-1 flex items-center justify-center text-[10px] px-1.5 py-0.5 rounded shadow font-mono font-bold"
+                            style={{
+                              background: isSelected ? 'var(--color-brand-yellow)' : 'rgba(0,0,0,0.85)',
+                              color: isSelected ? '#000000' : 'var(--color-brand-yellow)',
+                              border: '1px solid #000000',
+                              lineHeight: 1,
+                            }}
+                          >
+                            #{candNum}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Aligned Reticle Crosshair Inside Inner Container */}
+                    {showReticle && (
+                      <div
+                        id="viewport-reticle"
+                        data-testid="viewport-reticle"
+                        className="absolute inset-0 pointer-events-none flex items-center justify-center"
+                      >
+                        <div className="w-14 h-14 border border-sky-400/50 rounded-full relative flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 bg-sky-400 rounded-full" />
+                          <div className="absolute w-20 h-px bg-sky-400/40" />
+                          <div className="absolute h-20 w-px bg-sky-400/40" />
                         </div>
                       </div>
-                    );
-                  })()}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {/* BIM Rebar Synthetic Grid Overlay Mode */}
-                {filterMode === 'BIM_GRID' && (
+                {filterMode === 'BIM_GRID' && !imageError && (
                   <div className="absolute inset-0 pointer-events-none opacity-40">
                     <svg className="w-full h-full">
                       <defs>
@@ -837,7 +919,7 @@ export function InspectionWorkbenchPage() {
 
                 {/* Bottom Right Provenance Badge (No overlap) */}
                 <div
-                  className="absolute bottom-3 right-3 px-2 py-1 rounded text-[10px] font-mono pointer-events-none flex items-center gap-1.5"
+                  className="absolute bottom-3 right-3 px-2 py-1 rounded text-[10px] font-mono pointer-events-none flex items-center gap-1.5 z-10"
                   style={{
                     background: 'rgba(0,0,0,0.85)',
                     color: analysisData?.hasCandidate ? 'var(--color-brand-yellow)' : '#38BDF8',
@@ -950,6 +1032,39 @@ export function InspectionWorkbenchPage() {
 
             {/* Viewport Control Bar (Top Right) */}
             <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10 flex-wrap">
+              {/* Zoom controls */}
+              <div className="flex items-center bg-black/80 rounded border border-white/15 px-1 py-0.5 gap-0.5">
+                <button
+                  id="zoom-out-btn"
+                  data-testid="zoom-out-btn"
+                  onClick={() => setZoomLevel(prev => Math.max(1, Number((prev - 0.25).toFixed(2))))}
+                  disabled={zoomLevel <= 1}
+                  className="px-1.5 py-0.5 text-[9px] font-mono text-neutral-300 hover:text-white disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
+                  title="Zoom Out"
+                >
+                  <ZoomOut size={11} />
+                </button>
+                <button
+                  id="zoom-reset-btn"
+                  data-testid="zoom-reset-btn"
+                  onClick={() => setZoomLevel(1)}
+                  className="px-1.5 py-0.5 text-[9px] font-mono text-neutral-300 hover:text-white cursor-pointer transition-colors"
+                  title="Reset Zoom to 100%"
+                >
+                  {Math.round(zoomLevel * 100)}%
+                </button>
+                <button
+                  id="zoom-in-btn"
+                  data-testid="zoom-in-btn"
+                  onClick={() => setZoomLevel(prev => Math.min(3, Number((prev + 0.25).toFixed(2))))}
+                  disabled={zoomLevel >= 3}
+                  className="px-1.5 py-0.5 text-[9px] font-mono text-neutral-300 hover:text-white disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
+                  title="Zoom In"
+                >
+                  <ZoomIn size={11} />
+                </button>
+              </div>
+
               {/* Mask overlay toggle (for uploaded images) */}
               {isUploadedFinding && (
                 <button
@@ -972,6 +1087,7 @@ export function InspectionWorkbenchPage() {
               {/* Reticle toggle */}
               <button
                 id="toggle-reticle-btn"
+                data-testid="toggle-reticle-btn"
                 onClick={() => setShowReticle(!showReticle)}
                 className="px-2 py-1 text-[9px] rounded font-mono cursor-pointer transition-colors"
                 style={{

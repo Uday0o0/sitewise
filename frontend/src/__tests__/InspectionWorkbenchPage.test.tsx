@@ -472,4 +472,263 @@ describe('InspectionWorkbenchPage (Activity 1.2 / Inspection Workbench)', () => 
       }));
     });
   });
+
+  it('renders real uploaded image with resolved API URL and toggles candidate mask overlay', async () => {
+    const uploadedTelemetry: InspectionTelemetryResponse = {
+      ...mockTelemetryData,
+      findingId: 'FND-UPL-002',
+      photogrammetricMetrology: {
+        ...mockTelemetryData.photogrammetricMetrology,
+        imageUrl: '/api/v4/evidence/images/IMG-TEST-002',
+      },
+    };
+
+    const uploadedAnalysis: FindingAnalysisResponse = {
+      ...mockAnalysisData,
+      findingId: 'FND-UPL-002',
+      imageId: 'IMG-TEST-002',
+      imageUrl: '/api/v4/evidence/images/IMG-TEST-002',
+      maskUrl: '/api/v4/evidence/images/IMG-TEST-002/mask',
+      hasCandidate: true,
+      algorithm: {
+        name: 'OPENCV_BLACKHAT_CRACK_CANDIDATE',
+        version: '1.2.0',
+      },
+      crackSummary: {
+        ...mockAnalysisData.crackSummary!,
+        candidateCount: 1,
+        candidates: [
+          {
+            id: 'Candidate 1',
+            areaPx: 1200,
+            traceLengthPx: 140,
+            meanWidthPx: 1.2,
+            maxWidthPx: 1.8,
+            boundingBox: [100, 150, 200, 80],
+            centroid: [150, 180],
+          },
+        ],
+      },
+      imageMetadata: {
+        ...mockAnalysisData.imageMetadata,
+        width: 934,
+        height: 1142,
+      },
+    };
+
+    const uploadedFindingsList: FindingListItem[] = [
+      {
+        id: 'FND-UPL-002',
+        title: 'Pier Cap Crack — Field Ingest',
+        structureElement: 'Pier Cap 18 Cantilever',
+        chainageFormatted: 'Ch. 14+320',
+        provenance: 'AI_INFERRED',
+        category: 'structural',
+        dispositionStatus: 'AWAITING_REVIEW',
+        isUploaded: true,
+      },
+    ];
+
+    vi.spyOn(api, 'getFindingTelemetry').mockResolvedValue(uploadedTelemetry);
+    vi.spyOn(api, 'listFindings').mockResolvedValue(uploadedFindingsList);
+    vi.spyOn(api, 'getFindingAnalysis').mockResolvedValue(uploadedAnalysis);
+    vi.spyOn(api, 'getFindingEvidenceLinks').mockResolvedValue(mockEvidenceLinks);
+
+    render(
+      <MemoryRouter initialEntries={['/inspections/FND-UPL-002']}>
+        <InspectionWorkbenchPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      const realImg = screen.getByTestId('real-inspection-image') as HTMLImageElement;
+      expect(realImg).toBeInTheDocument();
+      expect(realImg.src).toContain('/api/v4/evidence/images/IMG-TEST-002');
+    });
+
+    // Simulate successful image load
+    const realImg = screen.getByTestId('real-inspection-image');
+    fireEvent.load(realImg);
+
+    // Verify mask overlay is present
+    const maskImg = screen.getByTestId('candidate-mask-overlay') as HTMLImageElement;
+    expect(maskImg).toBeInTheDocument();
+    expect(maskImg.src).toContain('/api/v4/evidence/images/IMG-TEST-002/mask');
+
+    // Toggle mask overlay OFF
+    const toggleMaskBtn = screen.getByTestId('toggle-mask-btn');
+    fireEvent.click(toggleMaskBtn);
+
+    expect(screen.queryByTestId('candidate-mask-overlay')).not.toBeInTheDocument();
+    // Real image remains displayed
+    expect(screen.getByTestId('real-inspection-image')).toBeInTheDocument();
+
+    // Toggle mask overlay back ON
+    fireEvent.click(toggleMaskBtn);
+    expect(screen.getByTestId('candidate-mask-overlay')).toBeInTheDocument();
+  });
+
+  it('handles image loading failure gracefully with fallback error card and retry action', async () => {
+    const uploadedTelemetry: InspectionTelemetryResponse = {
+      ...mockTelemetryData,
+      findingId: 'FND-UPL-ERR',
+      photogrammetricMetrology: {
+        ...mockTelemetryData.photogrammetricMetrology,
+        imageUrl: '/api/v4/evidence/images/IMG-MISSING',
+      },
+    };
+
+    const uploadedAnalysis: FindingAnalysisResponse = {
+      ...mockAnalysisData,
+      findingId: 'FND-UPL-ERR',
+      imageId: 'IMG-MISSING',
+      imageUrl: '/api/v4/evidence/images/IMG-MISSING',
+      maskUrl: '/api/v4/evidence/images/IMG-MISSING/mask',
+      hasCandidate: true,
+      algorithm: {
+        name: 'OPENCV_BLACKHAT_CRACK_CANDIDATE',
+        version: '1.2.0',
+      },
+    };
+
+    vi.spyOn(api, 'getFindingTelemetry').mockResolvedValue(uploadedTelemetry);
+    vi.spyOn(api, 'listFindings').mockResolvedValue([
+      {
+        id: 'FND-UPL-ERR',
+        title: 'Broken Ingest Finding',
+        structureElement: 'Pier Cap 18',
+        chainageFormatted: 'Ch. 14+320',
+        provenance: 'AI_INFERRED',
+        category: 'structural',
+        dispositionStatus: 'AWAITING_REVIEW',
+        isUploaded: true,
+      },
+    ]);
+    vi.spyOn(api, 'getFindingAnalysis').mockResolvedValue(uploadedAnalysis);
+    vi.spyOn(api, 'getFindingEvidenceLinks').mockResolvedValue(mockEvidenceLinks);
+
+    render(
+      <MemoryRouter initialEntries={['/inspections/FND-UPL-ERR']}>
+        <InspectionWorkbenchPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('real-inspection-image')).toBeInTheDocument();
+    });
+
+    // Simulate image error event
+    fireEvent.error(screen.getByTestId('real-inspection-image'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('real-image-error-fallback')).toBeInTheDocument();
+      expect(screen.getByText(/Unable to Load Source Inspection Image/i)).toBeInTheDocument();
+      // Mask overlay must not float when the base image failed to load
+      expect(screen.queryByTestId('candidate-mask-overlay')).not.toBeInTheDocument();
+    });
+
+    // Click retry
+    const retryBtn = screen.getByRole('button', { name: /Retry Image Request/i });
+    fireEvent.click(retryBtn);
+
+    // After retry click, error fallback resets
+    expect(screen.queryByTestId('real-image-error-fallback')).not.toBeInTheDocument();
+  });
+
+  it('supports synchronized viewport zooming and candidate marker selection without coordinate drift', async () => {
+    const uploadedTelemetry: InspectionTelemetryResponse = {
+      ...mockTelemetryData,
+      findingId: 'FND-UPL-ZOOM',
+      photogrammetricMetrology: {
+        ...mockTelemetryData.photogrammetricMetrology,
+        imageUrl: '/api/v4/evidence/images/IMG-ZOOM',
+      },
+    };
+
+    const uploadedAnalysis: FindingAnalysisResponse = {
+      ...mockAnalysisData,
+      findingId: 'FND-UPL-ZOOM',
+      imageId: 'IMG-ZOOM',
+      imageUrl: '/api/v4/evidence/images/IMG-ZOOM',
+      maskUrl: '/api/v4/evidence/images/IMG-ZOOM/mask',
+      hasCandidate: true,
+      algorithm: {
+        name: 'OPENCV_BLACKHAT_CRACK_CANDIDATE',
+        version: '1.2.0',
+      },
+      crackSummary: {
+        ...mockAnalysisData.crackSummary!,
+        candidateCount: 1,
+        candidates: [
+          {
+            id: 'Candidate 1',
+            areaPx: 1200,
+            traceLengthPx: 140,
+            meanWidthPx: 1.2,
+            maxWidthPx: 1.8,
+            boundingBox: [100, 150, 200, 80],
+            centroid: [150, 180],
+          },
+        ],
+      },
+      imageMetadata: {
+        ...mockAnalysisData.imageMetadata,
+        width: 1000,
+        height: 800,
+      },
+    };
+
+    vi.spyOn(api, 'getFindingTelemetry').mockResolvedValue(uploadedTelemetry);
+    vi.spyOn(api, 'listFindings').mockResolvedValue([
+      {
+        id: 'FND-UPL-ZOOM',
+        title: 'Zoom Finding',
+        structureElement: 'Pier Cap 18',
+        chainageFormatted: 'Ch. 14+320',
+        provenance: 'AI_INFERRED',
+        category: 'structural',
+        dispositionStatus: 'AWAITING_REVIEW',
+        isUploaded: true,
+      },
+    ]);
+    vi.spyOn(api, 'getFindingAnalysis').mockResolvedValue(uploadedAnalysis);
+    vi.spyOn(api, 'getFindingEvidenceLinks').mockResolvedValue(mockEvidenceLinks);
+
+    render(
+      <MemoryRouter initialEntries={['/inspections/FND-UPL-ZOOM']}>
+        <InspectionWorkbenchPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('real-inspection-image')).toBeInTheDocument();
+    });
+
+    fireEvent.load(screen.getByTestId('real-inspection-image'));
+
+    const viewportContent = screen.getByTestId('inspection-viewport-content');
+    expect(viewportContent).toHaveStyle({ transform: 'scale(1)' });
+
+    // Click Zoom In
+    const zoomInBtn = screen.getByTestId('zoom-in-btn');
+    fireEvent.click(zoomInBtn);
+    expect(viewportContent).toHaveStyle({ transform: 'scale(1.25)' });
+
+    // Zoom in again
+    fireEvent.click(zoomInBtn);
+    expect(viewportContent).toHaveStyle({ transform: 'scale(1.5)' });
+
+    // Reset Zoom
+    const zoomResetBtn = screen.getByTestId('zoom-reset-btn');
+    fireEvent.click(zoomResetBtn);
+    expect(viewportContent).toHaveStyle({ transform: 'scale(1)' });
+
+    // Select candidate marker
+    const candRow = screen.getByTestId('candidate-row-candidate-1');
+    fireEvent.click(candRow);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-candidate-marker')).toBeInTheDocument();
+    });
+  });
 });
