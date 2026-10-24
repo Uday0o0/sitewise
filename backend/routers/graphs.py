@@ -74,12 +74,16 @@ async def get_graph_topology(
     Enforces project boundaries when project_id is provided.
     """
     if project_id:
-        prj_res = await db.execute(select(Project).where(Project.id == project_id))
-        if not prj_res.scalar_one_or_none():
+        prj_res = await db.execute(
+            select(Project).where((Project.id == project_id) | (Project.package_id == project_id))
+        )
+        prj = prj_res.scalar_one_or_none()
+        if not prj:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Project '{project_id}' not found.",
             )
+        project_id = prj.id
 
     # Nodes query
     stmt_nodes = select(GraphNode).where(GraphNode.graph_id == graph_id)

@@ -857,3 +857,120 @@ async def test_11_automatic_evidence_graph_generation():
         assert node_map["N-MIT-001"]["tier"] == 5
         assert node_map["N-MIT-001"]["provenance"] == "PROPOSED_ACTION"
         assert node_map["N-MIT-001"]["nodeType"] in ["ACTION", "MITIGATION"]
+
+
+@pytest.mark.asyncio
+async def test_30_baseline_project_lookup_and_package_id_contract():
+    """Verify baseline project retrieval via both project_id and package_id."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # 1. Projects listing contains PRJ-NH48-PKG3 with PKG-3
+        res = await ac.get("/api/v4/projects")
+        assert res.status_code == 200
+        projects = res.json()
+        assert any(p["id"] == "PRJ-NH48-PKG3" and p["packageId"] == "PKG-3" for p in projects)
+
+        # 2. Overview lookup with canonical project ID PRJ-NH48-PKG3
+        res_prj = await ac.get("/api/v4/projects/PRJ-NH48-PKG3/overview")
+        assert res_prj.status_code == 200
+        ov_prj = res_prj.json()
+        assert ov_prj["projectMetadata"]["projectId"] == "PRJ-NH48-PKG3"
+        assert ov_prj["projectMetadata"]["packageId"] == "PKG-3"
+        assert "NH-48 Elevated Corridor" in ov_prj["projectMetadata"]["projectName"]
+
+        # 3. Overview lookup with package ID PKG-3 resolves correctly
+        res_pkg = await ac.get("/api/v4/projects/PKG-3/overview")
+        assert res_pkg.status_code == 200
+        ov_pkg = res_pkg.json()
+        assert ov_pkg["projectMetadata"]["projectId"] == "PRJ-NH48-PKG3"
+        assert ov_pkg["projectMetadata"]["packageId"] == "PKG-3"
+
+        # 4. Planning endpoints also resolve via both identifiers
+        res_mat_prj = await ac.get("/api/v4/projects/PRJ-NH48-PKG3/materials/reconciliation")
+        assert res_mat_prj.status_code == 200
+        res_mat_pkg = await ac.get("/api/v4/projects/PKG-3/materials/reconciliation")
+        assert res_mat_pkg.status_code == 200
+
+        res_clm_prj = await ac.get("/api/v4/projects/PRJ-NH48-PKG3/claims")
+        assert res_clm_prj.status_code == 200
+        res_clm_pkg = await ac.get("/api/v4/projects/PKG-3/claims")
+        assert res_clm_pkg.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_31_nonexistent_project_lookup_returns_404():
+    """Verify genuinely nonexistent projects return 404 rather than leaking other project data."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Nonexistent overview must return 404
+        res_ov = await ac.get("/api/v4/projects/NONEXISTENT-PROJECT-999/overview")
+        assert res_ov.status_code == 404
+        assert res_ov.json()["detail"] == "Project not found"
+
+        # Nonexistent materials reconciliation must return 404
+        res_mat = await ac.get("/api/v4/projects/NONEXISTENT-PROJECT-999/materials/reconciliation")
+        assert res_mat.status_code == 404
+
+        # Nonexistent contractor claims must return 404
+        res_clm = await ac.get("/api/v4/projects/NONEXISTENT-PROJECT-999/claims")
+        assert res_clm.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_32_seed_initialization_and_repeat_execution_idempotency():
+    """Verify seed_baseline_if_missing and init_db can be executed repeatedly without duplication or data loss."""
+    from database import init_db
+    from seed import seed_baseline_if_missing
+
+    # Repeat init_db execution
+    await init_db()
+
+    # Repeat seed_baseline_if_missing execution
+    async with async_session() as session:
+        was_seeded = await seed_baseline_if_missing(session, force=False)
+        assert was_seeded is False  # Must be a no-op because project already exists
+
+        # Check that projects count and baseline finding are exactly preserved
+        proj_res = await session.execute(select(Project).where(Project.id == "PRJ-NH48-PKG3"))
+        assert proj_res.scalar_one_or_none() is not None
+
+        findings_res = await session.execute(select(Finding).where(Finding.id == "FND-104"))
+        assert findings_res.scalar_one_or_none() is not None
+
+
+@pytest.mark.asyncio
+async def test_33_fresh_database_startup_auto_seeds_baseline(tmp_path):
+    """Simulate a fresh cloud deployment (e.g. Render) with an empty database and verify automatic seeding on startup."""
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+    from database import Base
+    from seed import seed_baseline_if_missing
+
+    test_db_file = tmp_path / "fresh_render_deploy.db"
+    test_db_url = f"sqlite+aiosqlite:///{test_db_file}"
+    temp_engine = create_async_engine(test_db_url, echo=False)
+    temp_sessionmaker = async_sessionmaker(temp_engine, class_=AsyncSession, expire_on_commit=False)
+
+    # 1. Create tables on fresh empty DB
+    async with temp_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # 2. Before auto-seed, projects table has 0 rows
+    async with temp_sessionmaker() as session:
+        empty_res = await session.execute(select(Project))
+        assert len(empty_res.scalars().all()) == 0
+
+        # 3. Execute automatic startup seed
+        seeded = await seed_baseline_if_missing(session, force=False)
+        assert seeded is True
+
+    # 4. Verify baseline project is now populated
+    async with temp_sessionmaker() as session:
+        proj_res = await session.execute(select(Project).where(Project.id == "PRJ-NH48-PKG3"))
+        proj = proj_res.scalar_one_or_none()
+        assert proj is not None
+        assert proj.name == "NH-48 Elevated Corridor - Package 3"
+        assert proj.package_id == "PKG-3"
+
+        # 5. Repeat auto-seed on existing DB is a no-op
+        seeded_again = await seed_baseline_if_missing(session, force=False)
+        assert seeded_again is False
+
+    await temp_engine.dispose()

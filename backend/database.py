@@ -72,6 +72,11 @@ async def init_db():
 
         await conn.run_sync(_migrate)
 
+    # Ensure baseline project and data are seeded if missing (idempotent, safe for production)
+    from seed import seed_baseline_if_missing
+    async with async_session() as session:
+        await seed_baseline_if_missing(session, force=False)
+
 
 
 async def get_db():

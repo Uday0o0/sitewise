@@ -71,7 +71,9 @@ def _resolve_safe_path(base_dir: str, relative_path: str) -> str:
 
 async def _verify_project(project_id: str, db: AsyncSession) -> Project:
     """Verify that project exists, else raise 404."""
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(
+        select(Project).where((Project.id == project_id) | (Project.package_id == project_id))
+    )
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(

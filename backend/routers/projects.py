@@ -43,10 +43,7 @@ async def get_overview(project_id: str, db: AsyncSession = Depends(get_db)):
     )
     project = result.scalar_one_or_none()
     if not project:
-        result = await db.execute(select(Project).limit(1))
-        project = result.scalar_one_or_none()
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="Project not found")
 
     # Findings
     findings_result = await db.execute(

@@ -288,9 +288,13 @@ async def save_scenario(
 ):
     """Save a named what-if scenario with parameters and evaluated results."""
     # Validate project isolation
-    proj_res = await db.execute(select(Project).where(Project.id == req.projectId))
-    if not proj_res.scalar_one_or_none():
+    proj_res = await db.execute(
+        select(Project).where((Project.id == req.projectId) | (Project.package_id == req.projectId))
+    )
+    proj = proj_res.scalar_one_or_none()
+    if not proj:
         raise HTTPException(status_code=404, detail=f"Project '{req.projectId}' not found")
+    req.projectId = proj.id
 
     # Evaluate results deterministically
     eval_req = SimulatorEvaluateRequest(
