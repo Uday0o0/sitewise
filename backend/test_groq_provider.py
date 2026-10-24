@@ -57,12 +57,12 @@ async def test_groq_successful_grounded_answer():
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock(return_value=mock_chat_completion)
 
-    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_test_key_dummy_12345", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "llama-3.3-70b-versatile"}):
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_test_key_dummy_12345", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
         with patch("groq.AsyncGroq", return_value=mock_client):
             resp = await ai_provider._ask_groq("What is the crack limit?", passages)
 
             assert resp.provider == "groq"
-            assert resp.model == "llama-3.3-70b-versatile"
+            assert resp.model == "openai/gpt-oss-120b"
             assert resp.provider_available is True
             assert resp.is_grounded is True
             assert resp.insufficient_evidence is False
@@ -164,10 +164,10 @@ async def test_groq_rate_limit_and_error_handling():
 
     mock_client_rl = MagicMock()
     mock_client_rl.chat.completions.create = AsyncMock(
-        side_effect=RateLimitError("Rate limit reached for model llama-3.3-70b-versatile", response=dummy_resp, body=None)
+        side_effect=RateLimitError("Rate limit reached for model openai/gpt-oss-120b", response=dummy_resp, body=None)
     )
 
-    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_dummy", "SITEWISE_AI_PROVIDER": "groq"}):
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_dummy", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
         with patch("groq.AsyncGroq", return_value=mock_client_rl):
             resp_rl = await ai_provider._ask_groq("Question?", passages)
             assert resp_rl.provider_available is True
@@ -180,7 +180,7 @@ async def test_groq_rate_limit_and_error_handling():
         side_effect=APITimeoutError(dummy_req)
     )
 
-    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_dummy", "SITEWISE_AI_PROVIDER": "groq"}):
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_dummy", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
         with patch("groq.AsyncGroq", return_value=mock_client_to):
             resp_to = await ai_provider._ask_groq("Question?", passages)
             assert resp_to.provider_available is True
@@ -192,11 +192,42 @@ async def test_groq_rate_limit_and_error_handling():
         side_effect=APIError("Internal Groq server error", request=dummy_req, body=None)
     )
 
-    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_dummy", "SITEWISE_AI_PROVIDER": "groq"}):
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_dummy", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
         with patch("groq.AsyncGroq", return_value=mock_client_err):
             resp_err = await ai_provider._ask_groq("Question?", passages)
             assert resp_err.provider_available is True
             assert "Groq API error" in (resp_err.error or "")
+
+
+@pytest.mark.asyncio
+async def test_groq_unicode_citation_brackets_parsing():
+    """Verify that Groq/OpenAI style unicode citation brackets like 【DOC-1】 are parsed and normalized."""
+    passages = [
+        {
+            "document_id": "DOC-UNICODE-01",
+            "document_title": "IS:456 Shear Spec",
+            "chunk_index": 0,
+            "content": "[Page 22] Nominal shear stress tau_c shall not exceed 0.62 MPa.",
+            "score": 0.96,
+        }
+    ]
+
+    mock_chat_completion = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Per IS:456 guidelines, shear stress is limited to 0.62 MPa 【DOC-1】."
+    mock_chat_completion.choices = [mock_choice]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_chat_completion)
+
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_dummy", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
+        with patch("groq.AsyncGroq", return_value=mock_client):
+            resp = await ai_provider._ask_groq("What is the shear stress limit?", passages)
+            assert resp.is_grounded is True
+            assert len(resp.citations) == 1
+            assert resp.citations[0].document_id == "DOC-UNICODE-01"
+            assert resp.citations[0].page_number == 22
+            assert "[DOC-1]" in resp.answer
 
 
 # ---------------------------------------------------------------------------
@@ -205,11 +236,20 @@ async def test_groq_rate_limit_and_error_handling():
 
 def test_provider_selection_environment():
     """Verify provider selection logic based on SITEWISE_AI_PROVIDER environment variable."""
-    # Explicit groq
-    with patch.dict(os.environ, {"SITEWISE_AI_PROVIDER": "groq", "GROQ_API_KEY": "gsk_123", "GROQ_MODEL": "llama-3.3-70b-versatile"}):
+    # Explicit groq with openai/gpt-oss-120b
+    with patch.dict(os.environ, {"SITEWISE_AI_PROVIDER": "groq", "GROQ_API_KEY": "gsk_123", "GROQ_MODEL": "openai/gpt-oss-120b"}):
         assert ai_provider.get_active_provider_name() == "groq"
         assert ai_provider.is_provider_available() is True
-        assert ai_provider.get_active_model_name() == "llama-3.3-70b-versatile"
+        assert ai_provider.get_active_model_name() == "openai/gpt-oss-120b"
+
+    # Default Groq model when GROQ_MODEL is omitted or empty
+    env_no_model = os.environ.copy()
+    env_no_model.pop("GROQ_MODEL", None)
+    env_no_model.pop("SITEWISE_GROQ_MODEL", None)
+    env_no_model["SITEWISE_AI_PROVIDER"] = "groq"
+    env_no_model["GROQ_API_KEY"] = "gsk_123"
+    with patch.dict(os.environ, env_no_model, clear=True):
+        assert ai_provider.get_active_model_name() == "openai/gpt-oss-120b"
 
     # Explicit gemini
     with patch.dict(os.environ, {"SITEWISE_AI_PROVIDER": "gemini", "GEMINI_API_KEY": "gem_123"}):
@@ -227,9 +267,12 @@ def test_provider_selection_environment():
         assert ai_provider.get_active_provider_name() == "gemini"
         assert ai_provider.is_provider_available() is True
 
-    # Custom model override
-    with patch.dict(os.environ, {"GROQ_MODEL": "llama-3.1-8b-instant", "SITEWISE_AI_PROVIDER": "groq", "GROQ_API_KEY": "gsk_123"}):
-        assert ai_provider.get_active_model_name() == "llama-3.1-8b-instant"
+    # Custom model overrides via GROQ_MODEL
+    with patch.dict(os.environ, {"GROQ_MODEL": "openai/gpt-oss-20b", "SITEWISE_AI_PROVIDER": "groq", "GROQ_API_KEY": "gsk_123"}):
+        assert ai_provider.get_active_model_name() == "openai/gpt-oss-20b"
+
+    with patch.dict(os.environ, {"GROQ_MODEL": "qwen/qwen3.8-27b", "SITEWISE_AI_PROVIDER": "groq", "GROQ_API_KEY": "gsk_123"}):
+        assert ai_provider.get_active_model_name() == "qwen/qwen3.8-27b"
 
 
 # ---------------------------------------------------------------------------
@@ -239,14 +282,14 @@ def test_provider_selection_environment():
 @pytest.mark.asyncio
 async def test_assistant_status_endpoint_reflects_groq():
     """Verify /assistant/status endpoint accurately reports Groq provider and configuration."""
-    # When Groq key is present
-    with patch.dict(os.environ, {"SITEWISE_AI_PROVIDER": "groq", "GROQ_API_KEY": "gsk_test_key", "GROQ_MODEL": "llama-3.3-70b-versatile"}):
+    # When Groq key is present with default model
+    with patch.dict(os.environ, {"SITEWISE_AI_PROVIDER": "groq", "GROQ_API_KEY": "gsk_test_key", "GROQ_MODEL": "openai/gpt-oss-120b"}):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             res = await ac.get("/api/v4/projects/PRJ-NH48-PKG3/assistant/status")
             assert res.status_code == 200
             data = res.json()
             assert data["provider"] == "groq"
-            assert data["model"] == "llama-3.3-70b-versatile"
+            assert data["model"] == "openai/gpt-oss-120b"
             assert data["providerAvailable"] is True
             assert data["isConfigured"] is True
 
@@ -282,7 +325,7 @@ async def test_assistant_query_endpoint_with_groq_flow():
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock(return_value=mock_chat_completion)
 
-    with patch.dict(os.environ, {"SITEWISE_AI_PROVIDER": "groq", "GROQ_API_KEY": "gsk_test", "GROQ_MODEL": "llama-3.3-70b-versatile"}):
+    with patch.dict(os.environ, {"SITEWISE_AI_PROVIDER": "groq", "GROQ_API_KEY": "gsk_test", "GROQ_MODEL": "openai/gpt-oss-120b"}):
         with patch("groq.AsyncGroq", return_value=mock_client):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
                 res = await ac.post(
@@ -292,7 +335,7 @@ async def test_assistant_query_endpoint_with_groq_flow():
                 assert res.status_code == 200
                 data = res.json()
                 assert data["provider"] == "groq"
-                assert data["model"] == "llama-3.3-70b-versatile"
+                assert data["model"] == "openai/gpt-oss-120b"
                 assert data["isGrounded"] is True
                 assert len(data["citations"]) == 1
                 assert data["citations"][0]["documentId"] == doc_id

@@ -42,12 +42,12 @@ def test_check_provider_configuration_groq():
     with patch.dict(os.environ, {
         "SITEWISE_AI_PROVIDER": "groq",
         "GROQ_API_KEY": secret_key,
-        "GROQ_MODEL": "llama-3.3-70b-versatile",
+        "GROQ_MODEL": "openai/gpt-oss-120b",
         "GEMINI_API_KEY": ""
     }):
         cfg = check_provider_configuration("groq")
         assert cfg["active_provider"] == "groq"
-        assert cfg["active_model"] == "llama-3.3-70b-versatile"
+        assert cfg["active_model"] == "openai/gpt-oss-120b"
         assert cfg["is_configured"] is True
         assert cfg["groq_key_detected"] is True
         assert cfg["gemini_key_detected"] is False
@@ -186,7 +186,7 @@ async def test_run_ai_diagnostics_live_mocked_success():
         status="SUCCESS",
         provenance="LIVE_AI_MODEL",
         provider="groq",
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         raw_output="{}",
         validated_data=valid_safety_data,
         error=None,
@@ -254,7 +254,7 @@ async def test_run_ai_diagnostics_live_mocked_provider_auth_error():
         status="PROVIDER_ERROR",
         provenance="SYNTHETIC_DEMO",
         provider="groq",
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         raw_output="",
         validated_data={},
         error="Error code 401: Invalid API Key provided",
@@ -276,7 +276,7 @@ async def test_run_ai_diagnostics_live_mocked_provider_rate_limit():
         status="PROVIDER_ERROR",
         provenance="SYNTHETIC_DEMO",
         provider="groq",
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         raw_output="",
         validated_data={},
         error="Error code 429: Rate limit reached for tokens per minute",
@@ -300,7 +300,7 @@ async def test_run_ai_diagnostics_live_schema_invalid():
         status="SUCCESS",
         provenance="LIVE_AI_MODEL",
         provider="groq",
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         raw_output="{}",
         validated_data=corrupted_data,
         error=None,

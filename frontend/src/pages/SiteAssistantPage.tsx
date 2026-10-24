@@ -375,6 +375,9 @@ Upload construction documents in the **Evidence Centre** or select a document sc
                 <>
                   <Bot size={13} style={{ color: 'var(--color-brand-yellow)' }} />
                   <span className="text-[11px] font-semibold text-gray-300">SITEWISE Grounded AI</span>
+                  {msg.model && (
+                    <span className="text-[10px] text-gray-400 font-mono">({msg.model})</span>
+                  )}
                 </>
               ) : (
                 <>

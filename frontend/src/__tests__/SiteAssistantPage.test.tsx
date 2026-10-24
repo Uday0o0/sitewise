@@ -49,7 +49,7 @@ const mockDocuments = [
 
 const mockStatusResponse = {
   provider: 'groq',
-  model: 'llama-3.3-70b-versatile',
+  model: 'openai/gpt-oss-120b',
   providerAvailable: true,
   isConfigured: true,
   supportedTypes: ['pdf', 'txt', 'md', 'csv'],
@@ -70,7 +70,7 @@ const mockAssistantAnswer = {
   isGrounded: true,
   insufficientEvidence: false,
   provider: 'groq',
-  model: 'llama-3.3-70b-versatile',
+  model: 'openai/gpt-oss-120b',
   providerAvailable: true,
   error: null,
   retrievalInfo: {
@@ -124,6 +124,9 @@ describe('SiteAssistantPage (Activity 5.1 / Grounded RAG Chatbot)', () => {
     // Check presence of Technical Q&A Assistant and Daily Site Briefing tabs
     expect(screen.getByRole('button', { name: /Technical Q&A Assistant/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Daily Site Briefing/i })).toBeInTheDocument();
+
+    // Verify dynamic model status badge displays configured Groq model
+    expect(await screen.findByText(/GROQ \(openai\/gpt-oss-120b\) • Live RAG Active/i)).toBeInTheDocument();
   });
 
   it('submits a grounded question and renders answer with verifiable citations', async () => {
@@ -163,7 +166,7 @@ describe('SiteAssistantPage (Activity 5.1 / Grounded RAG Chatbot)', () => {
       isGrounded: false,
       insufficientEvidence: true,
       provider: 'groq',
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       providerAvailable: true,
       error: null,
       retrievalInfo: {

@@ -1,13 +1,13 @@
 """AI provider abstraction for SITEWISE document-grounded QA.
 
 Supports:
-1. Groq Cloud (llama-3.3-70b-versatile, llama-3.1-8b-instant, etc.) via official groq SDK.
+1. Groq Cloud (openai/gpt-oss-120b, openai/gpt-oss-20b, qwen/qwen3.8-27b, etc.) via official groq SDK.
 2. Google Gemini (gemini-2.0-flash) via google-generativeai SDK.
 
 Configured via environment variables:
 - SITEWISE_AI_PROVIDER: 'groq' | 'gemini' | 'auto' (default: 'auto')
 - GROQ_API_KEY: Groq Cloud API key
-- GROQ_MODEL: Groq model ID (default: 'llama-3.3-70b-versatile')
+- GROQ_MODEL: Groq model ID (default: 'openai/gpt-oss-120b')
 - GEMINI_API_KEY: Google Gemini API key
 - SITEWISE_AI_MODEL: Gemini model ID (default: 'gemini-2.0-flash')
 
@@ -39,11 +39,11 @@ logger = logging.getLogger(__name__)
 # Configuration from environment
 # ---------------------------------------------------------------------------
 
-
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 AI_PROVIDER_SETTING = os.getenv("SITEWISE_AI_PROVIDER", "auto").strip().lower()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_MODEL = os.getenv("GROQ_MODEL", os.getenv("SITEWISE_GROQ_MODEL", "llama-3.3-70b-versatile")).strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", os.getenv("SITEWISE_GROQ_MODEL", DEFAULT_GROQ_MODEL)).strip() or DEFAULT_GROQ_MODEL
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("SITEWISE_AI_MODEL", "gemini-2.0-flash").strip()
@@ -51,9 +51,8 @@ GEMINI_MODEL = os.getenv("SITEWISE_AI_MODEL", "gemini-2.0-flash").strip()
 AI_REQUEST_TIMEOUT = int(os.getenv("SITEWISE_AI_TIMEOUT_SECONDS", "60"))
 AI_MAX_CONTEXT_PASSAGES = int(os.getenv("SITEWISE_AI_MAX_PASSAGES", "8"))
 
-# Groq free-tier limits: 1,000 output tokens per minute for qwen/qwen3.8-27b.
-# Default to 700 tokens to provide safety margin and prevent HTTP 429 errors.
-GROQ_MAX_OUTPUT_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", os.getenv("SITEWISE_AI_MAX_TOKENS", "700")))
+# Groq tokens limit: 2048 to allow reasoning models sufficient headroom
+GROQ_MAX_OUTPUT_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", os.getenv("SITEWISE_AI_MAX_TOKENS", "2048")))
 GROQ_MAX_CONTEXT_PASSAGES = int(os.getenv("GROQ_MAX_PASSAGES", "4"))
 GROQ_MAX_PASSAGE_CHARS = int(os.getenv("GROQ_MAX_PASSAGE_CHARS", "600"))
 
@@ -119,13 +118,21 @@ def _build_context_prompt(passages: list[dict]) -> str:
     return "\n".join(parts)
 
 
+def _normalize_citation_text(text: str) -> str:
+    """Normalize unicode brackets around DOC citations to standard ASCII brackets."""
+    if not text:
+        return text
+    import re
+    return re.sub(r'[【]DOC[- ]*(\d+)[】]', r'[DOC-\1]', text)
+
+
 def _validate_citations(raw_answer: str, passages: list[dict]) -> list[Citation]:
     """Extract and validate citation markers from the model answer."""
     import re
     citations = []
     seen = set()
     max_idx = len(passages)
-    for m in re.finditer(r'\[DOC-(\d+)\]', raw_answer):
+    for m in re.finditer(r'[\[【]DOC[- ]*(\d+)[\]】]', raw_answer):
         idx = int(m.group(1))
         if idx < 1 or idx > max_idx:
             continue  # reject fabricated citation
@@ -192,9 +199,11 @@ def get_active_model_name() -> str:
 
     p = get_active_provider_name()
     if p == "groq":
-        return os.getenv("GROQ_MODEL", os.getenv("SITEWISE_GROQ_MODEL", GROQ_MODEL))
+        model = (os.getenv("GROQ_MODEL") or os.getenv("SITEWISE_GROQ_MODEL") or DEFAULT_GROQ_MODEL).strip()
+        return model or DEFAULT_GROQ_MODEL
     elif p == "gemini":
-        return os.getenv("SITEWISE_AI_MODEL", GEMINI_MODEL)
+        model = (os.getenv("SITEWISE_AI_MODEL") or GEMINI_MODEL or "gemini-2.0-flash").strip()
+        return model or "gemini-2.0-flash"
     return ""
 
 
@@ -215,7 +224,7 @@ def get_provider_info() -> dict:
     """Return public metadata about the configured AI provider."""
     p = get_active_provider_name()
     avail = is_provider_available()
-    m = get_active_model_name() if avail else ""
+    m = get_active_model_name()
     return {
         "provider": p,
         "model": m,
@@ -230,8 +239,8 @@ def get_provider_info() -> dict:
 
 async def _ask_groq(question: str, passages: list[dict]) -> AIResponse:
     """Execute grounded question answering using Groq Cloud SDK."""
-    active_key = os.getenv("GROQ_API_KEY", GROQ_API_KEY)
-    active_model = os.getenv("GROQ_MODEL", os.getenv("SITEWISE_GROQ_MODEL", GROQ_MODEL))
+    active_key = os.getenv("GROQ_API_KEY", GROQ_API_KEY).strip()
+    active_model = (os.getenv("GROQ_MODEL") or os.getenv("SITEWISE_GROQ_MODEL") or DEFAULT_GROQ_MODEL).strip()
 
     if not active_key:
         return AIResponse(
@@ -269,7 +278,12 @@ async def _ask_groq(question: str, passages: list[dict]) -> AIResponse:
             max_tokens=2048,
         )
 
-        raw_answer = response.choices[0].message.content or ""
+        choice_msg = response.choices[0].message
+        raw_answer = choice_msg.content or ""
+        if not raw_answer and hasattr(choice_msg, "reasoning") and choice_msg.reasoning:
+            raw_answer = choice_msg.reasoning
+
+        raw_answer = _normalize_citation_text(raw_answer)
 
         # Check for insufficient evidence
         insufficient = any(phrase in raw_answer.lower() for phrase in [
@@ -786,7 +800,10 @@ async def execute_reasoning(request: ReasoningRequest) -> ReasoningResponse:
                 temperature=0.2,
                 max_tokens=GROQ_MAX_OUTPUT_TOKENS
             )
-            raw_output = completion.choices[0].message.content or ""
+            choice_msg = completion.choices[0].message
+            raw_output = choice_msg.content or ""
+            if not raw_output and hasattr(choice_msg, "reasoning") and choice_msg.reasoning:
+                raw_output = choice_msg.reasoning
             
         elif provider_name == "gemini":
             import google.generativeai as genai
