@@ -4,6 +4,14 @@ SITEWISE is a full-stack construction intelligence platform designed to support 
 
 ---
 
+## Live Deployments
+
+- **Live Application (Frontend)**: [https://sitewise-wheat.vercel.app/overview](https://sitewise-wheat.vercel.app/overview)
+- **Production API (Backend)**: [https://sitewise-21jo.onrender.com](https://sitewise-21jo.onrender.com)
+- **Interactive API Documentation (Swagger)**: [https://sitewise-21jo.onrender.com/docs](https://sitewise-21jo.onrender.com/docs)
+
+---
+
 ## System Architecture
 
 The platform follows a decoupled, resilient architecture:
