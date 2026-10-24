@@ -490,3 +490,85 @@ async def test_assistant_query_ocr_or_failed_document_diagnostics():
         assert data["insufficientEvidence"] is False
         assert data["error"] is not None
 
+
+@pytest.mark.asyncio
+async def test_ncr_request_supported_by_inspection_and_code_passages():
+    """Verify an NCR request where multiple passages support the violation generates a multi-citation draft."""
+    passages = [
+        {
+            "document_id": "DOC-INSPECT-01",
+            "document_title": "Pier 18 Optical Metrology Log",
+            "chunk_index": 0,
+            "content": "[Page 3] Pier 18 cantilever transverse shear plane crack aperture measured 0.38mm under dead load.",
+            "score": 0.95,
+        },
+        {
+            "document_id": "DOC-CODE-02",
+            "document_title": "IRC:112 Bridge Design Specification",
+            "chunk_index": 0,
+            "content": "[Page 48] Clause 12.3: Maximum allowable crack width for severe environmental exposure is 0.20mm.",
+            "score": 0.90,
+        },
+    ]
+
+    mock_chat_completion = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = (
+        "**Engineering Non-Conformance Report (NCR-084)**\n"
+        "Project: Pier 18 Cantilever Section\n"
+        "Observed Defect: Measured crack aperture of 0.38 mm [DOC-1] exceeds the allowable limit of 0.20 mm specified in IRC:112 Clause 12.3 [DOC-2].\n"
+        "Disposition: Contractor HCC-NCC JV must submit root cause and epoxy pressure injection method statement."
+    )
+    mock_chat_completion.choices = [mock_choice]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_chat_completion)
+
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_test", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
+        with patch("groq.AsyncGroq", return_value=mock_client):
+            resp = await ai_provider._ask_groq("Draft NCR-084 for Pier 18 crack aperture exceedance", passages)
+            assert resp.is_grounded is True
+            assert resp.insufficient_evidence is False
+            assert len(resp.citations) == 2
+            assert resp.citations[0].document_id == "DOC-INSPECT-01"
+            assert resp.citations[0].page_number == 3
+            assert resp.citations[1].document_id == "DOC-CODE-02"
+            assert resp.citations[1].page_number == 48
+
+
+@pytest.mark.asyncio
+async def test_ncr_request_when_document_states_compliance_honestly_reports_compliance():
+    """Verify that when an NCR is requested but documents state compliance, the assistant honestly reports compliance."""
+    passages = [
+        {
+            "document_id": "DOC-5442BA12E9",
+            "document_title": "Pier 18 QA Inspection Report",
+            "chunk_index": 0,
+            "content": "Pier 18 Cantilever QA Log: Ultrasonic pulse velocity measured 3850 m/s across transverse shear plane. Verified compliant with IRC:112 Clause 12.3 crack aperture limit 0.20mm.",
+            "score": 0.92,
+        }
+    ]
+
+    mock_chat_completion = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = (
+        "**Engineering Non-Conformance Report (NCR-084)**\n"
+        "Location: Pier 18 Transverse Shear Plane\n"
+        "Observed Condition: QA log records UPV at 3850 m/s and states 'Verified compliant with IRC:112 Clause 12.3 crack aperture limit 0.20mm' [DOC-1].\n"
+        "Non-Conformance Status: The uploaded documentation does not contain evidence of a non-conformance for Pier 18. Actual crack aperture exceedance is missing from project records."
+    )
+    mock_chat_completion.choices = [mock_choice]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_chat_completion)
+
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_test", "SITEWISE_AI_PROVIDER": "groq", "GROQ_MODEL": "openai/gpt-oss-120b"}):
+        with patch("groq.AsyncGroq", return_value=mock_client):
+            resp = await ai_provider._ask_groq("Draft NCR-084 for Pier 18", passages)
+            assert resp.is_grounded is True
+            assert resp.insufficient_evidence is False
+            assert len(resp.citations) == 1
+            assert resp.citations[0].document_id == "DOC-5442BA12E9"
+            assert "compliant" in resp.answer.lower()
+
+

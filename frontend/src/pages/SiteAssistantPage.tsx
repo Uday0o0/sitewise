@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { DataProvenanceBadge } from '../components/DataProvenanceBadge';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import {
   Send,
   Bot,
@@ -417,9 +418,13 @@ Upload construction documents in the **Evidence Centre** or select a document sc
               )}
 
               {/* Message Content */}
-              <div className="font-sans whitespace-pre-wrap leading-relaxed space-y-2">
-                {msg.content}
-              </div>
+              {msg.sender === 'user' ? (
+                <div className="font-sans whitespace-pre-wrap leading-relaxed space-y-2">
+                  {msg.content}
+                </div>
+              ) : (
+                <MarkdownRenderer content={msg.content} />
+              )}
 
               {/* Citations Section */}
               {msg.citations && msg.citations.length > 0 && (
