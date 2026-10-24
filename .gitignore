@@ -5,6 +5,7 @@
 *.env.*
 !.env.example
 !backend/.env.example
+!frontend/.env.example
 
 # Python & Virtual Environments
 __pycache__/
@@ -45,3 +46,11 @@ dist-ssr/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local Development & Historical Audit Reports (Kept local, excluded from GitHub)
+SITEWISE_PHASE_A_GAP_AUDIT.md
+report/FRONTEND_AUTOMATED_TESTING_REPORT.md
+report/GIT_CHECKPOINT_AND_INSPECTION_REPORT.md
+report/SITEWISE_Architecture_and_QA_Audit_Report.md
+report/SITEWISE_PHASE_A_GAP_AUDIT.md
+report/screenshots/
