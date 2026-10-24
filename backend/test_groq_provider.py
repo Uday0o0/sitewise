@@ -385,12 +385,13 @@ async def test_groq_unicode_dashes_spaces_and_brackets_in_citations():
     passages = [
         {"document_id": "D1", "document_title": "Doc 1", "chunk_index": 0, "content": "Evidence 1", "score": 0.9},
         {"document_id": "D2", "document_title": "Doc 2", "chunk_index": 1, "content": "Evidence 2", "score": 0.8},
+        {"document_id": "D3", "document_title": "Doc 3", "chunk_index": 2, "content": "Evidence 3", "score": 0.7},
     ]
 
     mock_chat_completion = MagicMock()
     mock_choice = MagicMock()
-    # \u2011 is non-breaking hyphen, \u2013 is en-dash, \u202f is narrow no-break space
-    mock_choice.message.content = "According to [DOC\u20111] and \u3010DOC\u20132\u3011, values are verified."
+    # \u2011 is non-breaking hyphen, \u2013 is en-dash, (DOC-3) is round parentheses
+    mock_choice.message.content = "According to [DOC\u20111], \u3010DOC\u20132\u3011, and (DOC-3), values are verified."
     mock_chat_completion.choices = [mock_choice]
 
     mock_client = MagicMock()
@@ -400,11 +401,13 @@ async def test_groq_unicode_dashes_spaces_and_brackets_in_citations():
         with patch("groq.AsyncGroq", return_value=mock_client):
             resp = await ai_provider._ask_groq("Test question", passages)
             assert resp.is_grounded is True
-            assert len(resp.citations) == 2
+            assert len(resp.citations) == 3
             assert resp.citations[0].document_id == "D1"
             assert resp.citations[1].document_id == "D2"
+            assert resp.citations[2].document_id == "D3"
             assert "[DOC-1]" in resp.answer
             assert "[DOC-2]" in resp.answer
+            assert "[DOC-3]" in resp.answer
 
 
 @pytest.mark.asyncio

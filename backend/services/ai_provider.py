@@ -132,8 +132,8 @@ def _normalize_citation_text(text: str) -> str:
     normalized = re.sub(r'[\u2010\u2011\u2012\u2013\u2014\u2212]', '-', text)
     # Normalize unicode spaces: \u00a0, \u2002, \u2003, \u202f, \u3000
     normalized = re.sub(r'[\u00a0\u2002\u2003\u202f\u3000]', ' ', normalized)
-    # Normalize brackets and variations: 【DOC-N】, ［DOC-N］, [DOC N], [DOC: N], [DOC - N]
-    normalized = re.sub(r'[【［⟦\[]\s*DOC\s*[-–—:]*\s*(\d+)\s*[】］⟧\]]', r'[DOC-\1]', normalized, flags=re.IGNORECASE)
+    # Normalize brackets, parentheses, and variations: 【DOC-N】, [DOC-N], (DOC-N), ［DOC-N］, [DOC N], [DOC: N]
+    normalized = re.sub(r'[【［⟦\[(]\s*DOC\s*[-–—:]*\s*(\d+)\s*[】］⟧\])]', r'[DOC-\1]', normalized, flags=re.IGNORECASE)
     return normalized
 
 
