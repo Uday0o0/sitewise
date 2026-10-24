@@ -126,6 +126,15 @@ class NdtCorroborationItem(BaseModel):
     sourceDocumentId: Optional[str] = None
 
 
+class NdtCorroborationCreate(BaseModel):
+    protocolName: str
+    status: Literal["PASS", "SCHEDULED", "AWAITING_DISPOSITION"] = "SCHEDULED"
+    details: str
+    scheduledTime: Optional[str] = None
+    provenance: Optional[str] = "HUMAN_REVIEWED"
+    sourceDocumentId: Optional[str] = None
+
+
 class ReviewerDispositionState(BaseModel):
     currentStatus: Literal["AWAITING_REVIEW", "CONFIRMED_NCR", "DOWNGRADED", "REJECTED"]
     dispositionedBy: Optional[str] = None
@@ -152,6 +161,7 @@ ProvenanceType = Literal[
     "AI_INFERRED",
     "SYNTHETIC_DEMO",
     "CALCULATED",
+    "PROJECT_SPEC",
 ]
 
 NodeType = Literal["EVIDENCE", "FINDING", "RISK", "IMPACT", "ACTION"]
@@ -212,7 +222,7 @@ class GoverningCodeLimit(BaseModel):
     code: str
     limit: str
     measured: str
-    status: Literal["EXCEEDED", "CRITICAL_ZONE", "COMPLIANT"]
+    status: Literal["EXCEEDED", "CRITICAL_ZONE", "COMPLIANT", "AWAITING_CALIBRATION"]
 
 
 class InspectorDrawerData(BaseModel):

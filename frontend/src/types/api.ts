@@ -203,7 +203,7 @@ export interface GoverningCodeLimit {
   code: string;
   limit: string;
   measured: string;
-  status: 'EXCEEDED' | 'CRITICAL_ZONE' | 'COMPLIANT';
+  status: 'EXCEEDED' | 'CRITICAL_ZONE' | 'COMPLIANT' | 'AWAITING_CALIBRATION';
 }
 
 export interface InspectorDrawerData {
@@ -240,6 +240,8 @@ export interface FindingEvidenceLinkItem {
   downloadUrl?: string;
   isMissingSource?: boolean;
 }
+
+export type FindingEvidenceLinkResponse = FindingEvidenceLinkItem;
 
 export interface FindingEvidenceLinksListResponse {
   findingId: string;

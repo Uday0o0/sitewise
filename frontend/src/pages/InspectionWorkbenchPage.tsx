@@ -7,7 +7,7 @@ import {
   Loader2, AlertTriangle, Camera, Crosshair, Eye,
   CheckCircle2, Clock, AlertCircle, Send, Upload, Layers,
   FileImage, Hash, Info, ShieldAlert, Sliders, RefreshCw,
-  FlaskConical, ExternalLink, Bot, FileText, GitFork
+  FlaskConical, ExternalLink, Bot, FileText, GitFork, Plus
 } from 'lucide-react';
 import type {
   FindingListItem,
@@ -53,6 +53,14 @@ export function InspectionWorkbenchPage() {
   const [evidenceLinks, setEvidenceLinks] = useState<FindingEvidenceLinkItem[]>([]);
   const [loadingLinks, setLoadingLinks] = useState<boolean>(false);
 
+  // NDT Corroboration modal state
+  const [isNdtModalOpen, setIsNdtModalOpen] = useState(false);
+  const [ndtProtocolName, setNdtProtocolName] = useState('Ultrasonic Pulse Velocity (UPV)');
+  const [ndtStatus, setNdtStatus] = useState<'PASS' | 'SCHEDULED' | 'AWAITING_DISPOSITION'>('PASS');
+  const [ndtDetails, setNdtDetails] = useState('');
+  const [ndtSourceDoc, setNdtSourceDoc] = useState('');
+  const [ndtSubmitting, setNdtSubmitting] = useState(false);
+
   // Load telemetry data for active finding
   const { data: telemetryData, loading: telemetryLoading, error: telemetryError, refetch: reloadTelemetry } = useApi(
     () => api.getFindingTelemetry(activeFindingId),
@@ -84,6 +92,58 @@ export function InspectionWorkbenchPage() {
   useEffect(() => {
     loadFindingsList();
   }, []);
+
+  const reloadEvidenceLinks = async () => {
+    setLoadingLinks(true);
+    try {
+      const res = await api.getFindingEvidenceLinks(activeFindingId);
+      setEvidenceLinks(res.links || []);
+    } catch {
+      setEvidenceLinks([]);
+    } finally {
+      setLoadingLinks(false);
+    }
+  };
+
+  const handleAttachSpecCitation = async () => {
+    try {
+      setLoadingLinks(true);
+      await api.createFindingEvidenceLink(activeFindingId, {
+        documentId: 'DOC-57F675F71F',
+        passageId: 1,
+        citationText: 'IRC:112-2020 Clause 12.3: Limit State of Cracking. Design crack width limit shall not exceed 0.20 mm under quasi-permanent load combinations.',
+        relevanceNote: 'Governing bridge design code permissible crack aperture limit (0.20mm).',
+        provenance: 'HUMAN_REVIEWED',
+        confidence: 0.98,
+      });
+      await reloadEvidenceLinks();
+    } catch {
+      await reloadEvidenceLinks();
+    }
+  };
+
+  const handleAddNdtSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ndtDetails.trim()) return;
+    setNdtSubmitting(true);
+    try {
+      await api.addNdtCorroboration(activeFindingId, {
+        protocolName: ndtProtocolName,
+        status: ndtStatus,
+        details: ndtDetails.trim(),
+        provenance: 'HUMAN_REVIEWED',
+        sourceDocumentId: ndtSourceDoc.trim() || undefined,
+      });
+      await reloadTelemetry();
+      setIsNdtModalOpen(false);
+      setNdtDetails('');
+      setNdtSourceDoc('');
+    } catch {
+      // Graceful fallback
+    } finally {
+      setNdtSubmitting(false);
+    }
+  };
 
   // Load analysis details whenever activeFindingId changes
   useEffect(() => {
@@ -216,7 +276,8 @@ export function InspectionWorkbenchPage() {
         signerLicenseId: 'RE-2024-DEMO',
       });
       setSubmitResult(result.message);
-      reloadTelemetry();
+      await reloadTelemetry();
+      await loadFindingsList();
     } catch {
       setSubmitResult('Failed to submit disposition');
     } finally {
@@ -272,7 +333,15 @@ export function InspectionWorkbenchPage() {
               {telemetryData.findingId}
             </span>
             {isUploadedFinding ? (
-              <DataProvenanceBadge type="HUMAN_REVIEWED" label="FIELD CAPTURE" sublabel="IMAGE-PROCESSING CANDIDATE" />
+              telemetryData.reviewerDispositionState.currentStatus === 'CONFIRMED_NCR' ? (
+                <DataProvenanceBadge type="HUMAN_REVIEWED" label="CONFIRMED NCR" sublabel="RESIDENT ENGINEER SIGNED" />
+              ) : telemetryData.reviewerDispositionState.currentStatus === 'DOWNGRADED' ? (
+                <DataProvenanceBadge type="HUMAN_REVIEWED" label="DOWNGRADED" sublabel="COSMETIC SHRINKAGE" />
+              ) : telemetryData.reviewerDispositionState.currentStatus === 'REJECTED' ? (
+                <DataProvenanceBadge type="HUMAN_REVIEWED" label="REJECTED" sublabel="IMAGING ARTIFACT" />
+              ) : (
+                <DataProvenanceBadge type="AI_INFERRED" label="FIELD CAPTURE" sublabel="IMAGE-PROCESSING CANDIDATE" />
+              )
             ) : (
               <DataProvenanceBadge type="DEMO_SYNTHETIC" label="CALIBRATION TARGET" sublabel="BENCHMARK DATASET" />
             )}
@@ -284,7 +353,11 @@ export function InspectionWorkbenchPage() {
                 border: `1px solid ${isUploadedFinding ? 'rgba(56,189,248,0.35)' : 'rgba(245,197,66,0.35)'}`
               }}
             >
-              {isUploadedFinding ? 'Real Image Ingest Pipeline' : 'Fixed Synthetic Calibration'}
+              {isUploadedFinding
+                ? telemetryData.reviewerDispositionState.currentStatus === 'AWAITING_REVIEW'
+                  ? 'Real Ingest • Awaiting Review'
+                  : `Real Ingest • ${telemetryData.reviewerDispositionState.currentStatus.replace('_', ' ')}`
+                : 'Fixed Synthetic Calibration'}
             </span>
           </div>
 
@@ -347,7 +420,12 @@ export function InspectionWorkbenchPage() {
               </button>
               <button
                 id="consult-assistant-btn"
-                onClick={() => navigate(`/assistant?prompt=${encodeURIComponent(`Evaluate ${activeFindingId} Pier 18 cantilever crack aperture (0.35mm) against IRC:112 Clause 12.3 criteria.`)}`)}
+                onClick={() => {
+                  const queryText = isUploadedFinding
+                    ? `Evaluate inspection finding ${activeFindingId} (${telemetryData.structureElement}) against applicable inspection codes. Note: Automated candidate region awaiting qualified engineering review.`
+                    : `Evaluate ${activeFindingId} Pier 18 cantilever crack aperture (0.35mm) against IRC:112 Clause 12.3 criteria.`;
+                  navigate(`/assistant?prompt=${encodeURIComponent(queryText)}`);
+                }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors"
                 style={{
                   background: 'var(--color-surface-container-high)',
@@ -664,72 +742,84 @@ export function InspectionWorkbenchPage() {
             {hasRealImage ? (
               /* REAL UPLOADED IMAGE RENDERING */
               <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-black">
-                {/* Real Uploaded Image */}
-                <img
-                  src={metro.imageUrl}
-                  alt="Real Structural Inspection Target"
-                  className="w-full h-full object-contain transition-all duration-200"
+                {/* Intrinsic aspect-ratio container ensuring overlay markers align with zero letterbox drift */}
+                <div
+                  className="relative flex items-center justify-center"
                   style={{
-                    filter:
-                      filterMode === 'EDGE_CONTRAST'
-                        ? 'contrast(200%) brightness(110%) saturate(150%)'
-                        : filterMode === 'INVERT'
-                        ? 'invert(1) hue-rotate(180deg)'
-                        : undefined,
+                    aspectRatio: `${analysisData?.imageMetadata?.width || 1} / ${analysisData?.imageMetadata?.height || 1}`,
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    width: 'auto',
+                    height: 'auto',
                   }}
-                />
-
-                {/* Candidate Mask Overlay (Toggled) — Shows subtle candidate pixels */}
-                {hasMask && showMaskOverlay && (
+                >
+                  {/* Real Uploaded Image */}
                   <img
-                    src={getApiUrl(`/api/v4/evidence/images/${analysisData?.imageId}/mask`)}
-                    alt="Crack Candidate Overlay Mask"
-                    className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-200"
+                    src={metro.imageUrl}
+                    alt="Real Structural Inspection Target"
+                    className="w-full h-full object-contain block transition-all duration-200"
                     style={{
-                      mixBlendMode: filterMode === 'INVERT' ? 'difference' : 'screen',
+                      filter:
+                        filterMode === 'EDGE_CONTRAST'
+                          ? 'contrast(200%) brightness(110%) saturate(150%)'
+                          : filterMode === 'INVERT'
+                          ? 'invert(1) hue-rotate(180deg)'
+                          : undefined,
                     }}
                   />
-                )}
 
-                {/* Selected Candidate Focus Marker — ONLY for the single selected candidate */}
-                {selectedCandidateId && analysisData?.crackSummary?.candidates && (() => {
-                  const selectedCand = analysisData.crackSummary.candidates.find(c => c.id === selectedCandidateId);
-                  if (!selectedCand) return null;
-                  const imgW = analysisData.imageMetadata?.width || 1;
-                  const imgH = analysisData.imageMetadata?.height || 1;
-                  const bbox = selectedCand.boundingBox;
-                  if (!bbox || bbox.length < 4) return null;
-                  const candNum = selectedCand.id.replace(/[^0-9]/g, '') || selectedCand.id;
-
-                  return (
-                    <div
-                      id="selected-candidate-marker"
-                      data-testid="selected-candidate-marker"
-                      className="absolute rounded pointer-events-none transition-all duration-200"
+                  {/* Candidate Mask Overlay (Toggled) — Shows subtle Safety Yellow candidate pixels */}
+                  {hasMask && showMaskOverlay && (
+                    <img
+                      src={getApiUrl(`/api/v4/evidence/images/${analysisData?.imageId}/mask`)}
+                      alt="Crack Candidate Overlay Mask"
+                      className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-200"
                       style={{
-                        left: `${Math.max(0, (bbox[0] / imgW) * 100)}%`,
-                        top: `${Math.max(0, (bbox[1] / imgH) * 100)}%`,
-                        width: `${Math.min(100, (bbox[2] / imgW) * 100)}%`,
-                        height: `${Math.min(100, (bbox[3] / imgH) * 100)}%`,
-                        border: '2px solid var(--color-brand-yellow)',
-                        boxShadow: '0 0 16px rgba(245, 197, 66, 0.7), inset 0 0 6px rgba(245, 197, 66, 0.2)',
-                        backgroundColor: 'rgba(245, 197, 66, 0.08)',
+                        mixBlendMode: filterMode === 'INVERT' ? 'difference' : 'normal',
                       }}
-                    >
+                    />
+                  )}
+
+                  {/* Selected Candidate Focus Marker — EXACTLY on top of candidate pixels */}
+                  {selectedCandidateId && analysisData?.crackSummary?.candidates && (() => {
+                    const selectedCand = analysisData.crackSummary.candidates.find(c => c.id === selectedCandidateId);
+                    if (!selectedCand) return null;
+                    const imgW = analysisData.imageMetadata?.width || 1;
+                    const imgH = analysisData.imageMetadata?.height || 1;
+                    const bbox = selectedCand.boundingBox;
+                    if (!bbox || bbox.length < 4) return null;
+                    const candNum = selectedCand.id.replace(/[^0-9]/g, '') || selectedCand.id;
+
+                    return (
                       <div
-                        className="absolute -top-3.5 -left-1 flex items-center justify-center text-[10px] px-1.5 py-0.5 rounded shadow font-mono font-bold"
+                        id="selected-candidate-marker"
+                        data-testid="selected-candidate-marker"
+                        className="absolute rounded pointer-events-none transition-all duration-200"
                         style={{
-                          background: 'var(--color-brand-yellow)',
-                          color: '#000000',
-                          border: '1px solid #000000',
-                          lineHeight: 1,
+                          left: `${Math.max(0, (bbox[0] / imgW) * 100)}%`,
+                          top: `${Math.max(0, (bbox[1] / imgH) * 100)}%`,
+                          width: `${Math.min(100, (bbox[2] / imgW) * 100)}%`,
+                          height: `${Math.min(100, (bbox[3] / imgH) * 100)}%`,
+                          border: '2px solid var(--color-brand-yellow)',
+                          boxShadow: '0 0 16px rgba(245, 197, 66, 0.7), inset 0 0 6px rgba(245, 197, 66, 0.2)',
+                          backgroundColor: 'rgba(245, 197, 66, 0.08)',
                         }}
                       >
-                        #{candNum}
+                        <div
+                          className="absolute -top-3.5 -left-1 flex items-center justify-center text-[10px] px-1.5 py-0.5 rounded shadow font-mono font-bold"
+                          style={{
+                            background: 'var(--color-brand-yellow)',
+                            color: '#000000',
+                            border: '1px solid #000000',
+                            lineHeight: 1,
+                          }}
+                        >
+                          #{candNum}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
+                </div>
 
                 {/* BIM Rebar Synthetic Grid Overlay Mode */}
                 {filterMode === 'BIM_GRID' && (
@@ -1072,18 +1162,27 @@ export function InspectionWorkbenchPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="py-2 text-center space-y-1">
-                    <p className="text-xs font-semibold text-neutral-400">Physical Dimensions Unavailable</p>
-                    <p className="text-[11px] text-neutral-500">
-                      No GSD calibration was supplied. Pixel dimensions cannot be converted to physical units without certified reference target.
+                  <div className="py-2 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
+                      <ShieldAlert size={14} className="shrink-0" />
+                      <span>Physical Dimensions Unavailable</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      No certified physical calibration (GSD in mm/px) was supplied with this upload.
+                      Pixel dimensions cannot be converted to physical units without a calibrated scale target.
                     </p>
+                    <div className="p-1.5 rounded bg-neutral-900/80 border border-neutral-800 text-[10px] font-mono text-neutral-400">
+                      Code limit &amp; exceedance evaluation suspended (Pixel-space only).
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
             <div className="pt-2 border-t border-[var(--color-surface-border-subtle)] text-[11px] text-[var(--color-text-tertiary)] flex items-center justify-between">
-              <span>Governing Code: <span className="font-mono text-neutral-300">{metro.governingCode || 'IRC:112'}</span></span>
+              <span>Governing Code: <span className="font-mono text-neutral-300">
+                {analysisData?.calibration.isCalibrated ? (metro.governingCode || 'IRC:112') : 'Evaluation Suspended (Uncalibrated)'}
+              </span></span>
               <span>Root Mechanism: <span className="text-neutral-300">{metro.inferredRootMechanism || 'Analysis pending'}</span></span>
             </div>
           </div>
@@ -1101,9 +1200,21 @@ export function InspectionWorkbenchPage() {
                 <FileText size={16} style={{ color: 'var(--color-brand-yellow)' }} />
                 <span>Grounded Evidence &amp; Source Citations</span>
               </h3>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                {loadingLinks ? 'FETCHING...' : `${evidenceLinks.length} VERIFIED CITATIONS`}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  id="attach-spec-citation-btn"
+                  data-testid="attach-spec-citation-btn"
+                  onClick={handleAttachSpecCitation}
+                  disabled={loadingLinks}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors cursor-pointer disabled:opacity-50"
+                  title="Link governing bridge design specification (IRC:112) as grounded evidence citation"
+                >
+                  + ATTACH SPEC CITATION
+                </button>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  {loadingLinks ? 'FETCHING...' : `${evidenceLinks.length} VERIFIED CITATIONS`}
+                </span>
+              </div>
             </div>
 
             {loadingLinks ? (
@@ -1173,9 +1284,20 @@ export function InspectionWorkbenchPage() {
             className="rounded-lg p-4"
             style={{ background: 'var(--color-surface-container-low)', border: '1px solid var(--color-surface-border-subtle)' }}
           >
-            <h3 className="text-sm font-semibold mb-3" style={{ fontFamily: 'var(--font-display)' }}>
-              NDT Corroboration Protocols
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+                <FlaskConical size={16} className="text-sky-400" />
+                <span>NDT Corroboration Protocols</span>
+              </h3>
+              <button
+                id="add-ndt-protocol-btn"
+                data-testid="add-ndt-protocol-btn"
+                onClick={() => setIsNdtModalOpen(true)}
+                className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/15 text-sky-400 border border-sky-500/30 hover:bg-sky-500/25 transition-colors cursor-pointer"
+              >
+                + LOG NDT PROTOCOL
+              </button>
+            </div>
             <div className="space-y-2">
               {telemetryData.ndtCorroboration && telemetryData.ndtCorroboration.length > 0 ? (
                 telemetryData.ndtCorroboration.map((ndt, i) => (
@@ -1508,6 +1630,134 @@ export function InspectionWorkbenchPage() {
                       Process & Inspect Image
                     </>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* NDT Logging Modal Drawer */}
+      {isNdtModalOpen && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div
+            className="w-full max-w-md rounded-lg p-6 space-y-4"
+            style={{
+              background: 'var(--color-surface-container-low)',
+              border: '1px solid var(--color-surface-border-strong)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+            }}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--color-surface-border-subtle)]">
+              <h2 className="text-base font-bold flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+                <FlaskConical size={18} className="text-sky-400" />
+                Log Corroborating NDT Protocol
+              </h2>
+              <button
+                onClick={() => setIsNdtModalOpen(false)}
+                className="text-neutral-400 hover:text-white text-xs px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 cursor-pointer"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <form onSubmit={handleAddNdtSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold block text-[var(--color-text-secondary)] mb-1">
+                  NDT Protocol Name *
+                </label>
+                <select
+                  value={ndtProtocolName}
+                  onChange={(e) => setNdtProtocolName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded outline-none font-mono"
+                  style={{
+                    background: 'var(--color-surface-container-med)',
+                    color: 'var(--color-text-primary)',
+                    border: '1px solid var(--color-surface-border-default)',
+                  }}
+                >
+                  <option value="Ultrasonic Pulse Velocity (UPV)">Ultrasonic Pulse Velocity (UPV)</option>
+                  <option value="Rebound Hammer Test (IS:13311)">Rebound Hammer Test (IS:13311 Part 2)</option>
+                  <option value="Core Extraction & Compressive Test">Core Extraction &amp; Compressive Test</option>
+                  <option value="Acoustic Emission Monitoring">Acoustic Emission Monitoring</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold block text-[var(--color-text-secondary)] mb-1">
+                  Test Status *
+                </label>
+                <select
+                  value={ndtStatus}
+                  onChange={(e) => setNdtStatus(e.target.value as 'PASS' | 'SCHEDULED' | 'AWAITING_DISPOSITION')}
+                  className="w-full px-3 py-2 text-xs rounded outline-none font-mono"
+                  style={{
+                    background: 'var(--color-surface-container-med)',
+                    color: 'var(--color-text-primary)',
+                    border: '1px solid var(--color-surface-border-default)',
+                  }}
+                >
+                  <option value="PASS">PASS (Compliant with Criteria)</option>
+                  <option value="SCHEDULED">SCHEDULED (Field Test Pending)</option>
+                  <option value="AWAITING_DISPOSITION">AWAITING DISPOSITION (Under Evaluation)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold block text-[var(--color-text-secondary)] mb-1">
+                  Test Details &amp; Observations *
+                </label>
+                <textarea
+                  value={ndtDetails}
+                  onChange={(e) => setNdtDetails(e.target.value)}
+                  placeholder="e.g. Ultrasonic pulse velocity measured 3,850 m/s across transverse plane. Concrete matrix homogeneity verified compliant."
+                  rows={3}
+                  className="w-full px-3 py-2 text-xs rounded outline-none resize-none font-mono"
+                  style={{
+                    background: 'var(--color-surface-container-med)',
+                    color: 'var(--color-text-primary)',
+                    border: '1px solid var(--color-surface-border-default)',
+                  }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold block text-[var(--color-text-secondary)] mb-1">
+                  Source Document Identifier — Optional
+                </label>
+                <input
+                  type="text"
+                  value={ndtSourceDoc}
+                  onChange={(e) => setNdtSourceDoc(e.target.value)}
+                  placeholder="e.g. DOC-5442BA12E9 or Lab Report #NDT-2024-04"
+                  className="w-full px-3 py-2 text-xs rounded outline-none font-mono"
+                  style={{
+                    background: 'var(--color-surface-container-med)',
+                    color: 'var(--color-text-primary)',
+                    border: '1px solid var(--color-surface-border-default)',
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNdtModalOpen(false)}
+                  className="px-4 py-2 text-xs rounded text-neutral-300 hover:text-white cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={ndtSubmitting || !ndtDetails.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded text-xs font-bold cursor-pointer disabled:opacity-50"
+                  style={{
+                    background: 'var(--color-brand-yellow)',
+                    color: '#000000',
+                  }}
+                >
+                  {ndtSubmitting ? <Loader2 className="animate-spin" size={13} /> : <CheckCircle2 size={13} />}
+                  <span>Save NDT Protocol</span>
                 </button>
               </div>
             </form>

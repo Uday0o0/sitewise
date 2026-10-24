@@ -465,16 +465,17 @@ def process_image(
         )
 
     # Step 8: Generate subtle RGBA overlay mask
-    # Transparent background, Safety Yellow candidate pixels (#F5C542) with 85% alpha (217)
-    # Subtle 1px red boundary for clean contrast without viewport clutter
+    # Note: OpenCV's imencode treats 4-channel image matrices as BGRA.
+    # Transparent background, Safety Yellow candidate pixels (#F5C542: B=66, G=197, R=245) with 85% alpha (217)
+    # Subtle 1px red boundary (#EF4444: B=68, G=68, R=239) with alpha 180 for clean contrast without viewport clutter
     h, w = filtered_mask.shape
     rgba_overlay = np.zeros((h, w, 4), dtype=np.uint8)
-    rgba_overlay[filtered_mask > 0] = [245, 197, 66, 217]
+    rgba_overlay[filtered_mask > 0] = [66, 197, 245, 217]
 
     # Subtle boundary
     dilated = cv2.dilate(filtered_mask, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))
     edge = cv2.subtract(dilated, filtered_mask)
-    rgba_overlay[edge > 0] = [239, 68, 68, 180]
+    rgba_overlay[edge > 0] = [68, 68, 239, 180]
 
     _, rgba_bytes = cv2.imencode(".png", rgba_overlay)
     _, binary_bytes = cv2.imencode(".png", filtered_mask)

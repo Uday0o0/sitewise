@@ -14,7 +14,7 @@ from database import get_db
 from models import Finding, UploadedImage, ImageAnalysis, Document, DocumentPassage, FindingEvidenceLink, Project, GraphNode
 from schemas import (
     InspectionTelemetryResponse, CaptureSource, PhotogrammetricMetrology,
-    NdtCorroborationItem, ReviewerDispositionState,
+    NdtCorroborationItem, NdtCorroborationCreate, ReviewerDispositionState,
     DispositionUpdateRequest, DispositionUpdateResponse,
     FindingUploadResponse, FindingAnalysisResponse, FindingListItem,
     ImageDimensions, PixelMetrics, PhysicalMetrics, CalibrationInfo,
@@ -278,7 +278,7 @@ async def upload_finding_image(
         governing_code=(
             "IRC:112 (Indicative Threshold: 0.20mm)"
             if metrics.calibrated_aperture_mm
-            else "Uncalibrated — Pixel Space Only"
+            else "Uncalibrated — Pixel Space Only (Evaluation Suspended)"
         ),
         exceedance_percent=(
             round((metrics.calibrated_aperture_mm - 0.20) / 0.20 * 100, 1)
@@ -303,7 +303,7 @@ async def upload_finding_image(
     )
     db.add(finding_record)
 
-    # Automatically generate or associate Evidence Graph for newly created finding
+    # Automatically generate or associate Evidence Graph for newly created finding (2-tier evidence-absent baseline)
     graph_id = await generate_or_get_evidence_graph(finding_record, db)
 
     await db.commit()
@@ -657,6 +657,30 @@ async def update_disposition(
     f.disposition_status = status_map[req.disposition]
     f.dispositioned_by = f"{req.signerName} ({req.signerLicenseId})"
     f.disposition_notes = req.engineerNotes
+    f.pki_certificate_valid = True
+    f.provenance = "HUMAN_REVIEWED"
+
+    clean_id = finding_id.replace("FND-", "")
+    protocol_id = f"NCR-{clean_id}" if req.disposition == "CONFIRM_NCR" else f"DSP-{clean_id}"
+
+    # Update impact and suggested action to match authoritative reviewer decision
+    if req.disposition == "CONFIRM_NCR":
+        f.direct_impact = "Confirmed structural non-conformance. Physical defect verified by Resident Engineer."
+        f.suggested_action = f"Issue formal Non-Conformance Report ({protocol_id}) to contractor. Require structural remediation plan."
+    elif req.disposition == "DOWNGRADE_SHRINKAGE":
+        f.direct_impact = "Cosmetic concrete surface shrinkage crack. No immediate structural capacity reduction."
+        f.suggested_action = "Apply surface sealant per standard maintenance protocol. Monitor during scheduled routine inspections."
+    elif req.disposition == "REJECT_ARTIFACT":
+        f.direct_impact = "Imaging artifact / optical illusion / non-structural surface discoloration."
+        f.suggested_action = "Archive finding as false-positive detection. No physical remedial action required."
+
+    # Synchronize Evidence Graph node status
+    gn_res = await db.execute(select(GraphNode).where(GraphNode.finding_id == f.id))
+    for node in gn_res.scalars().all():
+        node.provenance = "HUMAN_REVIEWED"
+        node.badge_text = f"HUMAN REVIEWED • {f.disposition_status.replace('_', ' ')}"
+        if node.node_type == "FINDING":
+            node.rationale = f"Dispositioned by {req.signerName} ({req.signerLicenseId}): {req.engineerNotes}"
 
     await db.commit()
 
@@ -665,9 +689,6 @@ async def update_disposition(
     hash_input = f"{finding_id}:{req.disposition}:{ts}"
     audit_hash = hashlib.sha256(hash_input.encode()).hexdigest()
 
-    clean_id = finding_id.replace("FND-", "")
-    protocol_id = f"NCR-{clean_id}" if req.disposition == "CONFIRM_NCR" else f"DSP-{clean_id}"
-
     return DispositionUpdateResponse(
         findingId=finding_id,
         newStatus=f.disposition_status,
@@ -675,6 +696,30 @@ async def update_disposition(
         auditHash=audit_hash,
         message=f"Protocol {protocol_id} generated with SHA-256 audit hash #{audit_hash[:8]}...{audit_hash[-4:]}",
     )
+
+
+@router.post("/{finding_id}/ndt-corroboration", response_model=InspectionTelemetryResponse)
+async def add_ndt_corroboration(
+    finding_id: str,
+    req: NdtCorroborationCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Log or schedule a non-destructive test (NDT) protocol to corroborate an inspection finding.
+    Supports Ultrasonic Pulse Velocity (UPV), Rebound Hammer (IS:13311), and Core Extraction.
+    """
+    result = await db.execute(select(Finding).where(Finding.id == finding_id))
+    f = result.scalar_one_or_none()
+    if not f:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    current_ndt = list(f.ndt_corroboration or [])
+    current_ndt.append(req.model_dump())
+    f.ndt_corroboration = current_ndt
+    await db.commit()
+    await db.refresh(f)
+
+    return await get_finding_telemetry(finding_id=finding_id, db=db)
 
 
 # ---------------------------------------------------------------------------

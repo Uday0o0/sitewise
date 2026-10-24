@@ -314,4 +314,162 @@ describe('InspectionWorkbenchPage (Activity 1.2 / Inspection Workbench)', () => 
       expect(screen.getByTestId('crack-candidate-count')).toHaveTextContent(/No candidates detected/i);
     });
   });
+
+  it('handles uncalibrated state by displaying warning and suspending physical exceedance evaluation', async () => {
+    const uncalibratedTelemetry: InspectionTelemetryResponse = {
+      ...mockTelemetryData,
+      findingId: 'FND-UPL-001',
+      photogrammetricMetrology: {
+        ...mockTelemetryData.photogrammetricMetrology,
+        calibratedApertureMm: 0,
+        linearTraceLengthMm: 0,
+        governingCode: 'Uncalibrated — Pixel Space Only (Evaluation Suspended)',
+        exceedancePercent: 0.0,
+      },
+    };
+
+    const uncalibratedAnalysis: FindingAnalysisResponse = {
+      ...mockAnalysisData,
+      findingId: 'FND-UPL-001',
+      algorithm: {
+        name: 'OPENCV_BLACKHAT_CRACK_CANDIDATE',
+        version: '1.2.0',
+      },
+      calibration: {
+        isCalibrated: false,
+        gsdMmPerPx: undefined,
+        provenance: 'USER_PROVIDED_UNVERIFIED',
+        note: 'Uncalibrated field upload',
+      },
+      crackSummary: {
+        ...mockAnalysisData.crackSummary!,
+        isCalibrated: false,
+        explanation: 'Image processing candidate detected in uncalibrated field image.',
+      },
+    };
+
+    const uncalFindingsList: FindingListItem[] = [
+      {
+        id: 'FND-UPL-001',
+        title: 'Pier 18 Field Upload',
+        structureElement: 'Pier Cap 18 Cantilever Downstream Face',
+        chainageFormatted: 'Ch. 14+320',
+        provenance: 'AI_INFERRED',
+        category: 'structural',
+        dispositionStatus: 'AWAITING_REVIEW',
+        isUploaded: true,
+      },
+    ];
+
+    vi.spyOn(api, 'getFindingTelemetry').mockResolvedValue(uncalibratedTelemetry);
+    vi.spyOn(api, 'listFindings').mockResolvedValue(uncalFindingsList);
+    vi.spyOn(api, 'getFindingAnalysis').mockResolvedValue(uncalibratedAnalysis);
+    vi.spyOn(api, 'getFindingEvidenceLinks').mockResolvedValue(mockEvidenceLinks);
+
+    render(
+      <MemoryRouter initialEntries={['/inspections/FND-UPL-001']}>
+        <InspectionWorkbenchPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Physical Dimensions Unavailable/i)).toBeInTheDocument();
+      expect(screen.getByText(/Pixel dimensions cannot be converted to physical units/i)).toBeInTheDocument();
+      expect(screen.getByText(/Code limit & exceedance evaluation suspended/i)).toBeInTheDocument();
+      expect(screen.getByText('0.44 px')).toBeInTheDocument();
+      expect(screen.getByText('0.55 px')).toBeInTheDocument();
+    });
+  });
+
+  it('attaches specification citation when clicking ATTACH SPEC CITATION', async () => {
+    vi.spyOn(api, 'getFindingTelemetry').mockResolvedValue(mockTelemetryData);
+    vi.spyOn(api, 'listFindings').mockResolvedValue(mockFindingsList);
+    vi.spyOn(api, 'getFindingAnalysis').mockResolvedValue(mockAnalysisData);
+    vi.spyOn(api, 'getFindingEvidenceLinks').mockResolvedValue({ findingId: 'FND-104', projectId: 'PRJ-NH48-PKG3', totalLinks: 0, links: [] });
+    const attachSpy = vi.spyOn(api, 'createFindingEvidenceLink').mockResolvedValue({
+      id: 'EV-LINK-NEW',
+      projectId: 'PRJ-NH48-PKG3',
+      findingId: 'FND-104',
+      documentId: 'DOC-57F675F71F',
+      passageId: 1,
+      pageNumber: 1,
+      citationText: 'IRC:112-2020 Clause 12.3: Limit State of Cracking.',
+      relevanceNote: 'Governing bridge design code permissible crack aperture limit (0.20mm).',
+      provenance: 'HUMAN_REVIEWED',
+      confidence: 0.98,
+      createdAt: '2026-10-24T18:00:00Z',
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/inspections/FND-104']}>
+        <InspectionWorkbenchPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('attach-spec-citation-btn')).toBeInTheDocument();
+    });
+
+    const attachBtn = screen.getByTestId('attach-spec-citation-btn');
+    fireEvent.click(attachBtn);
+
+    await waitFor(() => {
+      expect(attachSpy).toHaveBeenCalledWith('FND-104', expect.objectContaining({
+        documentId: 'DOC-57F675F71F',
+        provenance: 'HUMAN_REVIEWED',
+      }));
+    });
+  });
+
+  it('opens NDT modal and logs new NDT corroboration protocol', async () => {
+    vi.spyOn(api, 'getFindingTelemetry').mockResolvedValue(mockTelemetryData);
+    vi.spyOn(api, 'listFindings').mockResolvedValue(mockFindingsList);
+    vi.spyOn(api, 'getFindingAnalysis').mockResolvedValue(mockAnalysisData);
+    vi.spyOn(api, 'getFindingEvidenceLinks').mockResolvedValue(mockEvidenceLinks);
+    const addNdtSpy = vi.spyOn(api, 'addNdtCorroboration').mockResolvedValue({
+      ...mockTelemetryData,
+      ndtCorroboration: [
+        ...(mockTelemetryData.ndtCorroboration || []),
+        {
+          protocolName: 'Rebound Hammer Test (IS:13311)',
+          status: 'PASS',
+          details: 'Rebound index of 38 measured across pier cap cantilever face.',
+          provenance: 'HUMAN_REVIEWED',
+          sourceDocumentId: 'DOC-NDT-RH-001',
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/inspections/FND-104']}>
+        <InspectionWorkbenchPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('add-ndt-protocol-btn')).toBeInTheDocument();
+    });
+
+    // Click button to open modal
+    fireEvent.click(screen.getByTestId('add-ndt-protocol-btn'));
+
+    // Modal drawer should be open
+    expect(screen.getByText('Log Corroborating NDT Protocol')).toBeInTheDocument();
+
+    // Fill in observations textarea
+    const textarea = screen.getByPlaceholderText(/Ultrasonic pulse velocity measured 3,850 m\/s/i);
+    fireEvent.change(textarea, { target: { value: 'Rebound index of 38 measured across pier cap cantilever face.' } });
+
+    // Submit form
+    const saveBtn = screen.getByRole('button', { name: /Save NDT Protocol/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(addNdtSpy).toHaveBeenCalledWith('FND-104', expect.objectContaining({
+        status: 'PASS',
+        details: 'Rebound index of 38 measured across pier cap cantilever face.',
+        provenance: 'HUMAN_REVIEWED',
+      }));
+    });
+  });
 });

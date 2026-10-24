@@ -53,6 +53,7 @@ import type {
   AssistantStatusResponse,
   NodeSourceDetailsResponse,
   FindingEvidenceLinksListResponse,
+  FindingEvidenceLinkResponse,
   ScenarioSaveRequest,
   ScenarioItemResponse,
   ScenarioListResponse,
@@ -110,6 +111,19 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  addNdtCorroboration: (findingId: string, data: {
+    protocolName: string;
+    status: 'PASS' | 'SCHEDULED' | 'AWAITING_DISPOSITION';
+    details: string;
+    scheduledTime?: string;
+    provenance?: string;
+    sourceDocumentId?: string;
+  }) =>
+    request<InspectionTelemetryResponse>(`/findings/${findingId}/ndt-corroboration`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   // Evidence Graph
   getGraphTopology: (graphId: string) =>
     request<EvidenceGraphResponse>(`/graphs/${graphId}/topology`),
@@ -119,6 +133,20 @@ export const api = {
 
   getFindingEvidenceLinks: (findingId: string) =>
     request<FindingEvidenceLinksListResponse>(`/findings/${findingId}/evidence-links`),
+
+  createFindingEvidenceLink: (findingId: string, data: {
+    documentId: string;
+    passageId: number;
+    citationText?: string;
+    relevanceNote?: string;
+    provenance?: string;
+    confidence?: number;
+    isAiInferred?: boolean;
+  }) =>
+    request<FindingEvidenceLinkResponse>(`/findings/${findingId}/evidence-links`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   // Simulator
   evaluateScenario: (data: SimulatorEvaluateRequest) =>
